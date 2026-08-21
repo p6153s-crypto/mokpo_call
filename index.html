@@ -461,6 +461,9 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     엑셀 저장
                 </button>
+                <button id="btn-sub-stats" class="flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold rounded-lg shadow transition-colors">
+                    <span class="text-lg">📊</span> 통계 보기
+                </button>
                 <button id="btn-add-substitution" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-lg shadow transition-colors flex items-center gap-2">
                     <span class="text-lg">➕</span> 대체근무 등록
                 </button>
@@ -1003,6 +1006,28 @@
     </div>
 </div>
 
+<!-- 대체근무 통계 모달 -->
+<div id="sub-stats-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+            <h3 class="text-lg font-bold">📊 대체근무 통계</h3>
+            <button id="close-sub-stats-modal" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div class="flex gap-1 px-6 pt-4">
+            <button data-stat-tab="rank" class="sub-stat-tab px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-sky-500 text-sky-600">전체 순위</button>
+            <button data-stat-tab="monthly" class="sub-stat-tab px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-700">월별 추이</button>
+            <button data-stat-tab="cross" class="sub-stat-tab px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-700">결근자→대체자</button>
+        </div>
+        <div class="overflow-y-auto flex-1 px-6 py-4 border-t border-slate-100">
+            <div id="sub-stats-rank-panel" class="space-y-1.5"></div>
+            <div id="sub-stats-monthly-panel" class="hidden space-y-2"></div>
+            <div id="sub-stats-cross-panel" class="hidden space-y-1.5"></div>
+        </div>
+    </div>
+</div>
+
 <!-- 퇴사 처리 모달 -->
 <div id="retire-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7">
@@ -1366,6 +1391,7 @@ const App = {
             subRankList: document.getElementById('sub-rank-list'),
             absenceWithoutSubList: document.getElementById('absence-without-sub-list'),
             substitutionModal: document.getElementById('substitution-modal'),
+            subStatsModal: document.getElementById('sub-stats-modal'),
             substitutionForm: document.getElementById('substitution-form'),
             subWorkDate: document.getElementById('sub-work-date'),
             subAbsentee: document.getElementById('sub-absentee'),
@@ -1582,6 +1608,11 @@ const App = {
 
         // 대체근무
         document.getElementById('btn-add-substitution').addEventListener('click', () => this.openSubModal());
+        document.getElementById('btn-sub-stats').addEventListener('click', () => this.openSubStatsModal());
+        document.getElementById('close-sub-stats-modal').addEventListener('click', () => this.dom.subStatsModal.classList.add('hidden'));
+        document.querySelectorAll('.sub-stat-tab').forEach(btn => {
+            btn.addEventListener('click', () => this._switchSubStatTab(btn.dataset.statTab));
+        });
 
         // 엑셀 저장 패널 토글
         document.getElementById('btn-sub-excel').addEventListener('click', () => {
@@ -2638,6 +2669,103 @@ const App = {
                 </div>`;
             }).join('')
             : '<p class="text-slate-400 text-sm text-center py-4">미등록 결근 없음 ✅</p>';
+    },
+
+    //
+    // 대체근무 통계 모달
+    //
+    openSubStatsModal() {
+        this._switchSubStatTab('rank');
+        this.dom.subStatsModal.classList.remove('hidden');
+    },
+
+    _switchSubStatTab(tab) {
+        this._subStatTab = tab;
+        document.querySelectorAll('.sub-stat-tab').forEach(btn => {
+            const active = btn.dataset.statTab === tab;
+            btn.classList.toggle('border-sky-500', active);
+            btn.classList.toggle('text-sky-600', active);
+            btn.classList.toggle('border-transparent', !active);
+            btn.classList.toggle('text-slate-500', !active);
+        });
+        document.getElementById('sub-stats-rank-panel').classList.toggle('hidden', tab !== 'rank');
+        document.getElementById('sub-stats-monthly-panel').classList.toggle('hidden', tab !== 'monthly');
+        document.getElementById('sub-stats-cross-panel').classList.toggle('hidden', tab !== 'cross');
+        if (tab === 'rank') this._renderSubStatsRank();
+        else if (tab === 'monthly') this._renderSubStatsMonthly();
+        else if (tab === 'cross') this._renderSubStatsCross();
+    },
+
+    // 탭1: 전체 기사 대체근무 횟수 순위 (상위 5명 제한 없이 전체)
+    _renderSubStatsRank() {
+        const subs = this.state.substitutions || [];
+        const countMap = {};
+        subs.forEach(s => { const k = String(s.substituteId||''); if (k) countMap[k] = (countMap[k]||0)+1; });
+        const ranked = Object.entries(countMap).sort((a,b)=>b[1]-a[1]);
+        const maxCnt = ranked.length ? ranked[0][1] : 0;
+        const medals = ['🥇','🥈','🥉'];
+        const el = document.getElementById('sub-stats-rank-panel');
+        el.innerHTML = ranked.length
+            ? `<p class="text-xs text-slate-400 mb-2">총 ${ranked.length}명 · 전체 ${subs.length}건</p>` +
+              ranked.map(([id, cnt], i) => {
+                const e = this.state.employees.find(emp=>String(emp.id)===id);
+                const pct = maxCnt > 0 ? Math.round((cnt/maxCnt)*100) : 0;
+                return `<div class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
+                    <span class="w-6 text-center text-sm flex-shrink-0">${medals[i] || (i+1)}</span>
+                    <span class="w-20 truncate text-sm font-medium flex-shrink-0">${this._esc(e?.name||'?')}</span>
+                    <div class="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-400 rounded-full" style="width:${pct}%"></div></div>
+                    <span class="w-12 text-right text-sm font-bold text-indigo-600 flex-shrink-0">${cnt}회</span>
+                </div>`;
+            }).join('')
+            : '<p class="text-slate-400 text-sm text-center py-6">데이터 없음</p>';
+    },
+
+    // 탭2: 월별 대체근무 건수 추이 (최근 12개월)
+    _renderSubStatsMonthly() {
+        const subs = this.state.substitutions || [];
+        const countMap = {};
+        subs.forEach(s => { const m = String(s.workDate||'').slice(0,7); if (m) countMap[m] = (countMap[m]||0)+1; });
+        const months = Object.keys(countMap).sort().slice(-12);
+        const maxCnt = months.length ? Math.max(...months.map(m=>countMap[m])) : 0;
+        const el = document.getElementById('sub-stats-monthly-panel');
+        el.innerHTML = months.length
+            ? months.map(m => {
+                const cnt = countMap[m];
+                const pct = maxCnt > 0 ? Math.round((cnt/maxCnt)*100) : 0;
+                return `<div class="flex items-center gap-3">
+                    <span class="w-16 text-xs text-slate-500 flex-shrink-0">${m}</span>
+                    <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-sky-400 rounded-full" style="width:${pct}%"></div></div>
+                    <span class="w-10 text-right text-sm font-bold text-sky-600 flex-shrink-0">${cnt}</span>
+                </div>`;
+            }).join('')
+            : '<p class="text-slate-400 text-sm text-center py-6">데이터 없음</p>';
+    },
+
+    // 탭3: 결근자 → 대체자 조합별 횟수 (상위 15건)
+    _renderSubStatsCross() {
+        const subs = (this.state.substitutions || []).filter(s => s.absenteeId && s.substituteId);
+        const countMap = {};
+        subs.forEach(s => {
+            const k = String(s.absenteeId) + '|' + String(s.substituteId);
+            countMap[k] = (countMap[k]||0) + 1;
+        });
+        const ranked = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).slice(0,15);
+        const el = document.getElementById('sub-stats-cross-panel');
+        el.innerHTML = ranked.length
+            ? ranked.map(([key, cnt]) => {
+                const [absId, subId] = key.split('|');
+                const absentee   = this.state.employees.find(e=>String(e.id)===absId);
+                const substitute = this.state.employees.find(e=>String(e.id)===subId);
+                return `<div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                    <div class="text-sm flex items-center gap-2">
+                        <span class="font-medium text-red-600">${this._esc(absentee?.name||'?')}</span>
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        <span class="font-medium text-green-600">${this._esc(substitute?.name||'?')}</span>
+                    </div>
+                    <span class="bg-indigo-100 text-indigo-700 font-bold text-xs px-2.5 py-1 rounded-full">${cnt}회</span>
+                </div>`;
+            }).join('')
+            : '<p class="text-slate-400 text-sm text-center py-6">결근자-대체자가 모두 지정된 기록이 없습니다.</p>';
     },
 
     //
