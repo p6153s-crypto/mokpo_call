@@ -1028,6 +1028,33 @@
     </div>
 </div>
 
+<!-- 대체근무자 정보 수정 모달 -->
+<div id="sub-emp-edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7">
+        <h3 class="text-lg font-bold mb-4">대체근무자 정보 수정</h3>
+        <form id="sub-emp-edit-form" class="space-y-4">
+            <input type="hidden" id="sub-emp-edit-id">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">이름 <span class="text-red-500">*</span></label>
+                <input type="text" id="sub-emp-edit-name" maxlength="50" class="block w-full rounded-lg border border-slate-300 p-2.5 text-sm shadow-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none" required>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">차량번호 / 메모</label>
+                <input type="text" id="sub-emp-edit-department" maxlength="100" class="block w-full rounded-lg border border-slate-300 p-2.5 text-sm shadow-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">최고관리자 비밀번호 <span class="text-red-500">*</span></label>
+                <input type="password" id="sub-emp-edit-password" class="block w-full rounded-lg border border-slate-300 p-2.5 text-sm shadow-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none" placeholder="비밀번호 입력" required>
+            </div>
+            <p id="sub-emp-edit-error" class="text-red-500 text-xs hidden"></p>
+            <div class="flex gap-3 pt-1">
+                <button type="button" id="cancel-sub-emp-edit-btn" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">취소</button>
+                <button type="submit" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold">저장</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- 퇴사 처리 모달 -->
 <div id="retire-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7">
@@ -1359,6 +1386,13 @@ const App = {
             approvalSortSelect: document.getElementById('approval-sort'),
             employeeListTable: document.getElementById('employee-list-table'),
             substituteEmpListTable: document.getElementById('substitute-emp-list-table'),
+            subEmpEditModal: document.getElementById('sub-emp-edit-modal'),
+            subEmpEditForm: document.getElementById('sub-emp-edit-form'),
+            subEmpEditId: document.getElementById('sub-emp-edit-id'),
+            subEmpEditName: document.getElementById('sub-emp-edit-name'),
+            subEmpEditDept: document.getElementById('sub-emp-edit-department'),
+            subEmpEditPassword: document.getElementById('sub-emp-edit-password'),
+            subEmpEditError: document.getElementById('sub-emp-edit-error'),
             retiredListTable: document.getElementById('retired-list-table'),
             retireModal: document.getElementById('retire-modal'),
             retireDateInput: document.getElementById('retire-date-input'),
@@ -1501,6 +1535,18 @@ const App = {
         this.dom.employeeListTable.addEventListener('click', this.handleEmpAction.bind(this));
         this.dom.employeeListTable.addEventListener('change', e => { if (e.target.classList.contains('employee-method-select')) this.callServer('updateEmployeeMethod', [e.target.dataset.employeeId, e.target.value]); });
         this.dom.substituteEmpListTable.addEventListener('click', this.handleEmpAction.bind(this));
+        this.dom.subEmpEditForm.addEventListener('submit', e => {
+            e.preventDefault();
+            this.dom.subEmpEditError.classList.add('hidden');
+            const id = this.dom.subEmpEditId.value;
+            const name = this.dom.subEmpEditName.value.trim();
+            const department = this.dom.subEmpEditDept.value.trim();
+            const password = this.dom.subEmpEditPassword.value;
+            if (!name) return this._showError(this.dom.subEmpEditError, '이름을 입력해주세요.');
+            if (!password) return this._showError(this.dom.subEmpEditError, '최고관리자 비밀번호를 입력해주세요.');
+            this.callServer('updateEmployeeInfo', [id, { name, department }, password]);
+        });
+        document.getElementById('cancel-sub-emp-edit-btn').addEventListener('click', () => this.dom.subEmpEditModal.classList.add('hidden'));
         document.getElementById('retired-list-table').addEventListener('click', this.handleEmpAction.bind(this));
 
         // 재직/퇴사 서브탭
@@ -1752,6 +1798,7 @@ const App = {
                 else if (e.message?.includes('결근자') || e.message?.includes('대체')) { this.dom.subFormError.textContent = e.message; this.dom.subFormError.classList.remove('hidden'); }
                 else if (func === 'addAbsenceByAdmin') { this.dom.absenceFormError.textContent = e.message; this.dom.absenceFormError.classList.remove('hidden'); }
                 else if (func === 'addNotice') { this.dom.noticeFormError.textContent = e.message; this.dom.noticeFormError.classList.remove('hidden'); }
+                else if (func === 'updateEmployeeInfo') { this.dom.subEmpEditError.textContent = e.message; this.dom.subEmpEditError.classList.remove('hidden'); }
                 else { this.showToast(e.message || '서버 오류가 발생했습니다.', 'error'); }
             })
             .callServerFunction(func, args);
@@ -1806,6 +1853,9 @@ const App = {
             this.showToast('재입사 처리되었습니다.');
         } else if (func === 'updateLeaveBonus') {
             this.showToast('연차 가감이 저장되었습니다.');
+        } else if (func === 'updateEmployeeInfo') {
+            this.dom.subEmpEditModal.classList.add('hidden');
+            this.showToast('정보가 수정되었습니다.');
         } else if (func === 'deleteMyRequestWithAuth') {
             this.dom.leavePasswordModal.classList.add('hidden'); this.dom.leavePasswordError.classList.add('hidden'); this.showToast('삭제되었습니다.');
         } else if (func === 'addAbsenceByAdmin') {
@@ -2467,12 +2517,17 @@ const App = {
             : '<tr><td colspan="5" class="p-8 text-center text-slate-400">퇴사자가 없습니다.</td></tr>';
 
         // 대체근무자(substitute) 목록
+        const isSuperForSub = this.state.adminRole === 'super';
         const subEmps = this.state.employees.filter(e => e.role === 'substitute');
         document.getElementById('sub-emp-count-badge').textContent = subEmps.length + '명';
         const subs = this.state.substitutions || [];
         this.dom.substituteEmpListTable.innerHTML = subEmps.length
             ? subEmps.map(e => {
                 const subCount = subs.filter(s => String(s.substituteId) === String(e.id)).length;
+                const actionBtns = isSuperForSub
+                    ? `<button data-id="${e.id}" data-act="editSubEmp" class="bg-slate-500 text-white px-2 py-1 rounded text-xs mr-1 hover:bg-slate-600">수정</button>
+                       <button data-id="${e.id}" data-act="delEmp" class="bg-gray-400 text-white px-2 py-1 rounded text-xs hover:bg-gray-500">삭제</button>`
+                    : '<span class="text-xs text-slate-300">-</span>';
                 return `<tr class="border-b hover:bg-slate-50">
                     <td data-label="이름" class="p-3 font-medium">
                         <div class="flex items-center gap-2">
@@ -2487,7 +2542,7 @@ const App = {
                             : '<span class="text-slate-400 text-sm">-</span>'}
                     </td>
                     <td data-label="작업" class="p-3 text-center">
-                        <span class="text-xs text-slate-300">-</span>
+                        ${actionBtns}
                     </td>
                 </tr>`;
             }).join('')
@@ -3559,6 +3614,15 @@ const App = {
             this.dom.reauthPassword.value = '';
             this.dom.reauthError.classList.add('hidden');
             this.dom.reauthModal.classList.remove('hidden');
+        } else if (act === 'editSubEmp') {
+            const emp = this.state.employees.find(e => String(e.id) === String(id));
+            if (!emp) return;
+            this.dom.subEmpEditId.value = id;
+            this.dom.subEmpEditName.value = emp.name || '';
+            this.dom.subEmpEditDept.value = emp.department || '';
+            this.dom.subEmpEditPassword.value = '';
+            this.dom.subEmpEditError.classList.add('hidden');
+            this.dom.subEmpEditModal.classList.remove('hidden');
         } else if (act === 'retireEmp') {
             const emp = this.state.employees.find(e => String(e.id) === String(id));
             this.state.pendingRetire = id;
