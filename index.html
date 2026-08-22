@@ -483,6 +483,15 @@
                         <option value="">전체</option>
                     </select>
                 </div>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <label class="text-sm font-medium text-slate-600 whitespace-nowrap">정렬:</label>
+                    <select id="sub-sort-order" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+                        <option value="date_desc">근무일 최신순</option>
+                        <option value="date_asc">근무일 오래된순</option>
+                        <option value="absentee_name">결근자 이름순</option>
+                        <option value="substitute_name">대체자 이름순</option>
+                    </select>
+                </div>
                 <div class="ml-auto text-sm text-slate-500">
                     총 <span id="sub-total-count" class="font-bold text-indigo-600">0</span>건
                 </div>
@@ -553,6 +562,9 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     엑셀 저장
                 </button>
+                <button id="btn-absence-stats" class="flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold rounded-lg shadow transition-colors">
+                    <span class="text-lg">📊</span> 통계 보기
+                </button>
                 <button id="btn-add-absence" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-lg shadow transition-colors flex items-center gap-2">
                     <span class="text-lg">➕</span> 결근 등록
                 </button>
@@ -586,6 +598,15 @@
                     <option value="결근(유급)">결근(유급)</option>
                     <option value="결근(무급)">결근(무급)</option>
                     <option value="조퇴">조퇴</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <label class="text-sm font-medium text-slate-600 whitespace-nowrap">정렬:</label>
+                <select id="absence-sort-order" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-400 focus:outline-none">
+                    <option value="date_desc">기간 최신순</option>
+                    <option value="date_asc">기간 오래된순</option>
+                    <option value="name">이름순</option>
+                    <option value="type">종류순</option>
                 </select>
             </div>
             <div class="ml-auto text-sm text-slate-500">
@@ -1077,6 +1098,59 @@
     </div>
 </div>
 
+<!-- 결근/조퇴 통계 모달 -->
+<div id="absence-stats-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+            <h3 class="text-lg font-bold">📊 결근/조퇴 통계</h3>
+            <button id="close-absence-stats-modal" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div class="flex gap-1 px-6 pt-4">
+            <button data-abs-stat-tab="rank" class="absence-stat-tab px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-sky-500 text-sky-600">개인별 통계</button>
+            <button data-abs-stat-tab="monthly" class="absence-stat-tab px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-700">월별 추이</button>
+        </div>
+        <div class="overflow-y-auto flex-1 px-6 py-4 border-t border-slate-100">
+            <div id="absence-stats-rank-panel" class="space-y-3">
+                <div class="flex flex-wrap gap-2 items-center pb-3 border-b border-slate-100">
+                    <div class="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                        <button data-abs-rank-period="all" class="abs-rank-period-btn px-3 py-1.5 text-xs font-semibold rounded-md bg-white shadow text-slate-800">전체</button>
+                        <button data-abs-rank-period="monthly" class="abs-rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800">월별</button>
+                        <button data-abs-rank-period="yearly" class="abs-rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800">연별</button>
+                    </div>
+                    <input type="month" id="absence-stats-rank-month" class="hidden border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                    <select id="absence-stats-rank-year" class="hidden border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none"></select>
+                    <div class="relative flex-1 min-w-[140px]">
+                        <span class="absolute inset-y-0 left-2.5 flex items-center text-slate-400 text-xs">🔍</span>
+                        <input type="text" id="absence-stats-rank-search" placeholder="이름 검색..." class="pl-7 pr-2 py-1.5 border border-slate-300 rounded-lg w-full text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                    </div>
+                    <select id="absence-stats-rank-sort" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                        <option value="total_desc">합계 많은순</option>
+                        <option value="total_asc">합계 적은순</option>
+                        <option value="name">이름순</option>
+                    </select>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2.5 font-semibold text-slate-600">이름</th>
+                                <th class="p-2.5 font-semibold text-amber-600 text-right">결근(유급)</th>
+                                <th class="p-2.5 font-semibold text-slate-500 text-right">결근(무급)</th>
+                                <th class="p-2.5 font-semibold text-indigo-600 text-right">조퇴</th>
+                                <th class="p-2.5 font-semibold text-slate-800 text-right">합계</th>
+                            </tr>
+                        </thead>
+                        <tbody id="absence-stats-rank-list" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="absence-stats-monthly-panel" class="hidden space-y-2"></div>
+        </div>
+    </div>
+</div>
+
 <!-- 대체근무자 정보 수정 모달 -->
 <div id="sub-emp-edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7">
@@ -1353,9 +1427,11 @@ const App = {
         today: null,
         subSearchTerm: '',
         subFilterMonth: '',
+        subSortOrder: 'date_desc',
         absenceSearchTerm: '',
         absenceFilterMonth: '',
         absenceFilterType: '',
+        absenceSortOrder: 'date_desc',
         noticeTargetDay: 'today',
         absenceType: '결근(무급)',
         dashboardSelectedUser: null,
@@ -1470,6 +1546,7 @@ const App = {
             // 대체근무
             subSearch: document.getElementById('sub-search'),
             subFilterMonth: document.getElementById('sub-filter-month'),
+            subSortOrder: document.getElementById('sub-sort-order'),
             subTotalCount: document.getElementById('sub-total-count'),
             substitutionTableBody: document.getElementById('substitution-table-body'),
             subRankList: document.getElementById('sub-rank-list'),
@@ -1504,6 +1581,12 @@ const App = {
             absenceFormError: document.getElementById('absence-form-error'),
             absenceExcelPanel: document.getElementById('absence-excel-panel'),
             absenceExcelMonthPicker: document.getElementById('absence-excel-month-picker'),
+            absenceSortOrder: document.getElementById('absence-sort-order'),
+            absenceStatsModal: document.getElementById('absence-stats-modal'),
+            absenceStatsRankMonth: document.getElementById('absence-stats-rank-month'),
+            absenceStatsRankYear: document.getElementById('absence-stats-rank-year'),
+            absenceStatsRankSearch: document.getElementById('absence-stats-rank-search'),
+            absenceStatsRankSort: document.getElementById('absence-stats-rank-sort'),
             // 공지사항
             noticeTodayList: document.getElementById('notice-today-list'),
             noticeTomorrowList: document.getElementById('notice-tomorrow-list'),
@@ -1784,6 +1867,7 @@ const App = {
         });
         this.dom.subSearch.addEventListener('input', e => { this.state.subSearchTerm = e.target.value; this.renderSubstitutions(); });
         this.dom.subFilterMonth.addEventListener('change', e => { this.state.subFilterMonth = e.target.value; this.renderSubstitutions(); });
+        this.dom.subSortOrder.addEventListener('change', e => { this.state.subSortOrder = e.target.value; this.renderSubstitutions(); });
 
         // 결근 관리
         document.getElementById('btn-add-absence')?.addEventListener('click', () => this.openAbsenceModal());
@@ -1808,6 +1892,19 @@ const App = {
         this.dom.absenceTableBody?.addEventListener('click', this.handleAbsenceTableClick.bind(this));
         document.getElementById('btn-absence-excel')?.addEventListener('click', () => this.dom.absenceExcelPanel.classList.toggle('hidden'));
         document.getElementById('btn-absence-excel-download')?.addEventListener('click', () => this.downloadAbsenceCSV());
+        this.dom.absenceSortOrder?.addEventListener('change', e => { this.state.absenceSortOrder = e.target.value; this.renderAbsences(); });
+        document.getElementById('btn-absence-stats')?.addEventListener('click', () => this.openAbsenceStatsModal());
+        document.getElementById('close-absence-stats-modal')?.addEventListener('click', () => this.dom.absenceStatsModal.classList.add('hidden'));
+        document.querySelectorAll('.absence-stat-tab').forEach(btn => {
+            btn.addEventListener('click', () => this._switchAbsenceStatTab(btn.dataset.absStatTab));
+        });
+        document.querySelectorAll('.abs-rank-period-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._switchAbsenceStatsRankPeriod(btn.dataset.absRankPeriod));
+        });
+        this.dom.absenceStatsRankMonth?.addEventListener('change', e => { this._absStatsRankValue = e.target.value; this._renderAbsenceStatsRank(); });
+        this.dom.absenceStatsRankYear?.addEventListener('change', e => { this._absStatsRankValue = e.target.value; this._renderAbsenceStatsRank(); });
+        this.dom.absenceStatsRankSearch?.addEventListener('input', e => { this._absStatsRankSearchTerm = e.target.value; this._renderAbsenceStatsRank(); });
+        this.dom.absenceStatsRankSort?.addEventListener('change', e => { this._absStatsRankSort = e.target.value; this._renderAbsenceStatsRank(); });
 
         this.dom.substitutionForm.addEventListener('submit', this.handleSubFormSubmit.bind(this));
         document.getElementById('cancel-sub-modal-btn').addEventListener('click', () => this.dom.substitutionModal.classList.add('hidden'));
@@ -2772,7 +2869,17 @@ const App = {
             });
         }
         if (this.state.subFilterMonth) filtered = filtered.filter(s=>String(s.workDate).startsWith(this.state.subFilterMonth));
-        filtered.sort((a,b)=>String(b.workDate).localeCompare(String(a.workDate)));
+
+        const sortOrder = this.state.subSortOrder || 'date_desc';
+        if (sortOrder === 'date_asc') {
+            filtered.sort((a,b)=>String(a.workDate).localeCompare(String(b.workDate)));
+        } else if (sortOrder === 'absentee_name') {
+            filtered.sort((a,b)=>this._resolveName(a.absenteeId,a.absenteeName,'미지정').localeCompare(this._resolveName(b.absenteeId,b.absenteeName,'미지정'),'ko'));
+        } else if (sortOrder === 'substitute_name') {
+            filtered.sort((a,b)=>this._resolveName(a.substituteId,a.substituteName,'미지정').localeCompare(this._resolveName(b.substituteId,b.substituteName,'미지정'),'ko'));
+        } else {
+            filtered.sort((a,b)=>String(b.workDate).localeCompare(String(a.workDate)));
+        }
 
         this.dom.subTotalCount.textContent = filtered.length;
 
@@ -3001,7 +3108,20 @@ const App = {
         if (this.state.absenceFilterType) {
             list = list.filter(r => r.type === this.state.absenceFilterType);
         }
-        list = [...list].sort((a,b)=>String(b.startDate).localeCompare(String(a.startDate)));
+        const absSort = this.state.absenceSortOrder || 'date_desc';
+        if (absSort === 'date_asc') {
+            list = [...list].sort((a,b)=>String(a.startDate).localeCompare(String(b.startDate)));
+        } else if (absSort === 'name') {
+            list = [...list].sort((a,b)=>{
+                const na = this.state.employees.find(emp=>String(emp.id)===String(a.employeeId))?.name || '';
+                const nb = this.state.employees.find(emp=>String(emp.id)===String(b.employeeId))?.name || '';
+                return na.localeCompare(nb, 'ko');
+            });
+        } else if (absSort === 'type') {
+            list = [...list].sort((a,b)=>String(a.type).localeCompare(String(b.type), 'ko'));
+        } else {
+            list = [...list].sort((a,b)=>String(b.startDate).localeCompare(String(a.startDate)));
+        }
 
         this.dom.absenceTotalCount.textContent = list.length;
 
@@ -3111,6 +3231,120 @@ const App = {
             csv += [(e?.name||''), (e?.department||''), r.type, r.startDate, r.endDate].join(',') + '\n';
         });
         this._downloadCSV(csv, `결근관리_${month}.csv`);
+    },
+
+    //
+    // 결근/조퇴 통계 모달
+    //
+    openAbsenceStatsModal() {
+        if (!this.dom.absenceStatsRankYear.options.length) {
+            const curYear = new Date().getFullYear();
+            for (let y = curYear; y >= curYear - 5; y--) this.dom.absenceStatsRankYear.add(new Option(y + '년', y));
+        }
+        if (!this._absStatsRankPeriod) {
+            this._absStatsRankPeriod = 'all';
+            this._absStatsRankSort = 'total_desc';
+            this._absStatsRankSearchTerm = '';
+            const today = this.state.today || this.toLocalISO(new Date());
+            this.dom.absenceStatsRankMonth.value = today.slice(0,7);
+            this._absStatsRankValue = today.slice(0,7);
+        }
+        this._switchAbsenceStatTab('rank');
+        this.dom.absenceStatsModal.classList.remove('hidden');
+    },
+
+    _switchAbsenceStatTab(tab) {
+        this._absStatTab = tab;
+        document.querySelectorAll('.absence-stat-tab').forEach(btn => {
+            const active = btn.dataset.absStatTab === tab;
+            btn.classList.toggle('border-sky-500', active);
+            btn.classList.toggle('text-sky-600', active);
+            btn.classList.toggle('border-transparent', !active);
+            btn.classList.toggle('text-slate-500', !active);
+        });
+        document.getElementById('absence-stats-rank-panel').classList.toggle('hidden', tab !== 'rank');
+        document.getElementById('absence-stats-monthly-panel').classList.toggle('hidden', tab !== 'monthly');
+        if (tab === 'rank') this._renderAbsenceStatsRank();
+        else if (tab === 'monthly') this._renderAbsenceStatsMonthly();
+    },
+
+    _switchAbsenceStatsRankPeriod(period) {
+        this._absStatsRankPeriod = period;
+        document.querySelectorAll('.abs-rank-period-btn').forEach(btn => {
+            const active = btn.dataset.absRankPeriod === period;
+            btn.className = `abs-rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                active ? 'bg-white shadow text-slate-800 font-semibold' : 'text-slate-500 hover:text-slate-800'}`;
+        });
+        this.dom.absenceStatsRankMonth.classList.toggle('hidden', period !== 'monthly');
+        this.dom.absenceStatsRankYear.classList.toggle('hidden', period !== 'yearly');
+        if (period === 'monthly') this._absStatsRankValue = this.dom.absenceStatsRankMonth.value;
+        else if (period === 'yearly') this._absStatsRankValue = this.dom.absenceStatsRankYear.value;
+        this._renderAbsenceStatsRank();
+    },
+
+    // 탭1: 개인별 결근(유급)/결근(무급)/조퇴 통계 — 전체/월별/연별 + 이름 검색 + 정렬
+    _renderAbsenceStatsRank() {
+        const period = this._absStatsRankPeriod || 'all';
+        const value  = this._absStatsRankValue || '';
+        let list = this.state.leaveRequests.filter(r => r.type==='결근(유급)' || r.type==='결근(무급)' || r.type==='조퇴');
+        if (period === 'monthly' && value) list = list.filter(r => String(r.startDate||'').startsWith(value));
+        else if (period === 'yearly' && value) list = list.filter(r => String(r.startDate||'').startsWith(String(value)));
+
+        const byEmp = {};
+        list.forEach(r => {
+            const k = String(r.employeeId||'');
+            if (!k) return;
+            if (!byEmp[k]) byEmp[k] = { paid: 0, unpaid: 0, early: 0 };
+            if (r.type === '결근(유급)') byEmp[k].paid++;
+            else if (r.type === '결근(무급)') byEmp[k].unpaid++;
+            else if (r.type === '조퇴') byEmp[k].early++;
+        });
+
+        let entries = Object.entries(byEmp).map(([id, c]) => {
+            const e = this.state.employees.find(emp => String(emp.id) === id);
+            const total = c.paid + c.unpaid + c.early;
+            return { id, name: e?.name || '?', active: !!(e && !e.resignDate), ...c, total };
+        }).filter(x => x.active);
+
+        const term = (this._absStatsRankSearchTerm || '').trim().toLowerCase();
+        if (term) entries = entries.filter(x => x.name.toLowerCase().includes(term));
+
+        const sort = this._absStatsRankSort || 'total_desc';
+        if (sort === 'total_desc') entries.sort((a,b) => b.total - a.total);
+        else if (sort === 'total_asc') entries.sort((a,b) => a.total - b.total);
+        else if (sort === 'name') entries.sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+
+        const el = document.getElementById('absence-stats-rank-list');
+        el.innerHTML = entries.length
+            ? entries.map(x => `<tr class="hover:bg-slate-50">
+                <td class="p-2.5 font-medium">${this._esc(x.name)}</td>
+                <td class="p-2.5 text-right text-amber-600">${x.paid || '-'}</td>
+                <td class="p-2.5 text-right text-slate-500">${x.unpaid || '-'}</td>
+                <td class="p-2.5 text-right text-indigo-600">${x.early || '-'}</td>
+                <td class="p-2.5 text-right font-bold text-slate-800">${x.total}</td>
+            </tr>`).join('')
+            : '<tr><td colspan="5" class="p-6 text-center text-slate-400 text-sm">해당 조건의 데이터가 없습니다.</td></tr>';
+    },
+
+    // 탭2: 월별 결근/조퇴 건수 추이 (최근 12개월)
+    _renderAbsenceStatsMonthly() {
+        const list = this.state.leaveRequests.filter(r => r.type==='결근(유급)' || r.type==='결근(무급)' || r.type==='조퇴');
+        const countMap = {};
+        list.forEach(r => { const m = String(r.startDate||'').slice(0,7); if (m) countMap[m] = (countMap[m]||0)+1; });
+        const months = Object.keys(countMap).sort().slice(-12);
+        const maxCnt = months.length ? Math.max(...months.map(m=>countMap[m])) : 0;
+        const el = document.getElementById('absence-stats-monthly-panel');
+        el.innerHTML = months.length
+            ? months.map(m => {
+                const cnt = countMap[m];
+                const pct = maxCnt > 0 ? Math.round((cnt/maxCnt)*100) : 0;
+                return `<div class="flex items-center gap-3">
+                    <span class="w-16 text-xs text-slate-500 flex-shrink-0">${m}</span>
+                    <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-red-400 rounded-full" style="width:${pct}%"></div></div>
+                    <span class="w-10 text-right text-sm font-bold text-red-600 flex-shrink-0">${cnt}</span>
+                </div>`;
+            }).join('')
+            : '<p class="text-slate-400 text-sm text-center py-6">데이터 없음</p>';
     },
 
     //
