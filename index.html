@@ -650,7 +650,12 @@
 
     <!-- 5. 승인 관리 (관리자) -->
     <div id="approval-view" class="hidden">
-        <div class="mb-6 border-b border-slate-200 pb-4"><h1 class="text-3xl font-bold">승인 관리</h1><p class="text-slate-500 mt-1">대기 중인 연차 신청을 승인/반려합니다.</p></div>
+        <div class="mb-6 border-b border-slate-200 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div><h1 class="text-3xl font-bold">승인 관리</h1><p class="text-slate-500 mt-1">대기 중인 연차 신청을 승인/반려합니다.</p></div>
+            <button id="btn-approval-stats" class="flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold rounded-lg shadow transition-colors">
+                <span class="text-lg">📊</span> 통계 보기
+            </button>
+        </div>
         <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
             <div class="relative w-full sm:w-64">
                 <span class="absolute inset-y-0 left-3 flex items-center text-slate-400">🔍</span>
@@ -1151,6 +1156,60 @@
     </div>
 </div>
 
+<!-- 승인 관리 통계 모달 -->
+<div id="approval-stats-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+            <h3 class="text-lg font-bold">📊 승인 관리 통계</h3>
+            <button id="close-approval-stats-modal" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div class="flex gap-1 px-6 pt-4">
+            <button data-appr-stat-tab="rank" class="approval-stat-tab px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-sky-500 text-sky-600">개인별 통계</button>
+            <button data-appr-stat-tab="monthly" class="approval-stat-tab px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-700">월별 추이</button>
+        </div>
+        <div class="overflow-y-auto flex-1 px-6 py-4 border-t border-slate-100">
+            <div id="approval-stats-rank-panel" class="space-y-3">
+                <div class="flex flex-wrap gap-2 items-center pb-3 border-b border-slate-100">
+                    <div class="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                        <button data-appr-rank-period="all" class="appr-rank-period-btn px-3 py-1.5 text-xs font-semibold rounded-md bg-white shadow text-slate-800">전체</button>
+                        <button data-appr-rank-period="monthly" class="appr-rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800">월별</button>
+                        <button data-appr-rank-period="yearly" class="appr-rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800">연별</button>
+                    </div>
+                    <input type="month" id="approval-stats-rank-month" class="hidden border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                    <select id="approval-stats-rank-year" class="hidden border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none"></select>
+                    <div class="relative flex-1 min-w-[140px]">
+                        <span class="absolute inset-y-0 left-2.5 flex items-center text-slate-400 text-xs">🔍</span>
+                        <input type="text" id="approval-stats-rank-search" placeholder="이름 검색..." class="pl-7 pr-2 py-1.5 border border-slate-300 rounded-lg w-full text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                    </div>
+                    <select id="approval-stats-rank-sort" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                        <option value="days_desc">사용일수 많은순</option>
+                        <option value="days_asc">사용일수 적은순</option>
+                        <option value="count_desc">신청건수 많은순</option>
+                        <option value="name">이름순</option>
+                    </select>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2.5 font-semibold text-slate-600">이름</th>
+                                <th class="p-2.5 font-semibold text-green-600 text-right">승인</th>
+                                <th class="p-2.5 font-semibold text-amber-600 text-right">대기</th>
+                                <th class="p-2.5 font-semibold text-red-500 text-right">반려</th>
+                                <th class="p-2.5 font-semibold text-slate-800 text-right">승인 사용일수</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approval-stats-rank-list" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="approval-stats-monthly-panel" class="hidden space-y-2"></div>
+        </div>
+    </div>
+</div>
+
 <!-- 대체근무자 정보 수정 모달 -->
 <div id="sub-emp-edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7">
@@ -1509,6 +1568,11 @@ const App = {
             pendingRequestsTable: document.getElementById('pending-requests-table'),
             approvalSearchInput: document.getElementById('approval-search'),
             approvalSortSelect: document.getElementById('approval-sort'),
+            approvalStatsModal: document.getElementById('approval-stats-modal'),
+            approvalStatsRankMonth: document.getElementById('approval-stats-rank-month'),
+            approvalStatsRankYear: document.getElementById('approval-stats-rank-year'),
+            approvalStatsRankSearch: document.getElementById('approval-stats-rank-search'),
+            approvalStatsRankSort: document.getElementById('approval-stats-rank-sort'),
             employeeListTable: document.getElementById('employee-list-table'),
             substituteEmpListTable: document.getElementById('substitute-emp-list-table'),
             substituteEmpInactiveListTable: document.getElementById('substitute-emp-inactive-list-table'),
@@ -1663,6 +1727,18 @@ const App = {
         // 승인
         this.dom.approvalSearchInput.addEventListener('input', e => { this.state.approvalSearchTerm = e.target.value; this.renderApproval(); });
         this.dom.approvalSortSelect.addEventListener('change', e => { this.state.approvalSortOrder = e.target.value; this.renderApproval(); });
+        document.getElementById('btn-approval-stats')?.addEventListener('click', () => this.openApprovalStatsModal());
+        document.getElementById('close-approval-stats-modal')?.addEventListener('click', () => this.dom.approvalStatsModal.classList.add('hidden'));
+        document.querySelectorAll('.approval-stat-tab').forEach(btn => {
+            btn.addEventListener('click', () => this._switchApprovalStatTab(btn.dataset.apprStatTab));
+        });
+        document.querySelectorAll('.appr-rank-period-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._switchApprovalStatsRankPeriod(btn.dataset.apprRankPeriod));
+        });
+        this.dom.approvalStatsRankMonth?.addEventListener('change', e => { this._apprStatsRankValue = e.target.value; this._renderApprovalStatsRank(); });
+        this.dom.approvalStatsRankYear?.addEventListener('change', e => { this._apprStatsRankValue = e.target.value; this._renderApprovalStatsRank(); });
+        this.dom.approvalStatsRankSearch?.addEventListener('input', e => { this._apprStatsRankSearchTerm = e.target.value; this._renderApprovalStatsRank(); });
+        this.dom.approvalStatsRankSort?.addEventListener('change', e => { this._apprStatsRankSort = e.target.value; this._renderApprovalStatsRank(); });
         this.dom.pendingRequestsTable.addEventListener('click', this.handleApproval.bind(this));
         document.getElementById('daily-leave-content').addEventListener('click', this.handleApproval.bind(this));
         document.getElementById('leave-edit-form').addEventListener('submit', this.handleSubmitEditForm.bind(this));
@@ -2600,6 +2676,120 @@ const App = {
                 return `<tr class="border-b hover:bg-slate-50"><td data-label="신청자" class="p-3">${this._esc(e?.name||'?')} <span class="status-badge status-${r.status}">${r.status}</span>${subBadge}</td><td data-label="기간" class="p-3 text-sm">${r.startDate}~${r.endDate}</td><td data-label="일수" class="p-3"><span class="font-medium">${r.days}</span>${absCheck}</td><td data-label="작업" class="p-3 text-center">${actions} ${editDeleteBtns}${addSubBtn}</td></tr>`;
             }).join('')
             : '<tr><td colspan="4" class="p-8 text-center text-slate-400">내역이 없습니다.</td></tr>';
+    },
+
+    //
+    // 승인 관리 통계 모달
+    //
+    openApprovalStatsModal() {
+        if (!this.dom.approvalStatsRankYear.options.length) {
+            const curYear = new Date().getFullYear();
+            for (let y = curYear; y >= curYear - 5; y--) this.dom.approvalStatsRankYear.add(new Option(y + '년', y));
+        }
+        if (!this._apprStatsRankPeriod) {
+            this._apprStatsRankPeriod = 'all';
+            this._apprStatsRankSort = 'days_desc';
+            this._apprStatsRankSearchTerm = '';
+            const today = this.state.today || this.toLocalISO(new Date());
+            this.dom.approvalStatsRankMonth.value = today.slice(0,7);
+            this._apprStatsRankValue = today.slice(0,7);
+        }
+        this._switchApprovalStatTab('rank');
+        this.dom.approvalStatsModal.classList.remove('hidden');
+    },
+
+    _switchApprovalStatTab(tab) {
+        this._apprStatTab = tab;
+        document.querySelectorAll('.approval-stat-tab').forEach(btn => {
+            const active = btn.dataset.apprStatTab === tab;
+            btn.classList.toggle('border-sky-500', active);
+            btn.classList.toggle('text-sky-600', active);
+            btn.classList.toggle('border-transparent', !active);
+            btn.classList.toggle('text-slate-500', !active);
+        });
+        document.getElementById('approval-stats-rank-panel').classList.toggle('hidden', tab !== 'rank');
+        document.getElementById('approval-stats-monthly-panel').classList.toggle('hidden', tab !== 'monthly');
+        if (tab === 'rank') this._renderApprovalStatsRank();
+        else if (tab === 'monthly') this._renderApprovalStatsMonthly();
+    },
+
+    _switchApprovalStatsRankPeriod(period) {
+        this._apprStatsRankPeriod = period;
+        document.querySelectorAll('.appr-rank-period-btn').forEach(btn => {
+            const active = btn.dataset.apprRankPeriod === period;
+            btn.className = `appr-rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                active ? 'bg-white shadow text-slate-800 font-semibold' : 'text-slate-500 hover:text-slate-800'}`;
+        });
+        this.dom.approvalStatsRankMonth.classList.toggle('hidden', period !== 'monthly');
+        this.dom.approvalStatsRankYear.classList.toggle('hidden', period !== 'yearly');
+        if (period === 'monthly') this._apprStatsRankValue = this.dom.approvalStatsRankMonth.value;
+        else if (period === 'yearly') this._apprStatsRankValue = this.dom.approvalStatsRankYear.value;
+        this._renderApprovalStatsRank();
+    },
+
+    // 탭1: 개인별 승인/대기/반려 건수 + 승인된 사용일수 — 전체/월별/연별 + 이름 검색 + 정렬
+    _renderApprovalStatsRank() {
+        const period = this._apprStatsRankPeriod || 'all';
+        const value  = this._apprStatsRankValue || '';
+        let list = this.state.leaveRequests || [];
+        if (period === 'monthly' && value) list = list.filter(r => String(r.startDate||'').startsWith(value));
+        else if (period === 'yearly' && value) list = list.filter(r => String(r.startDate||'').startsWith(String(value)));
+
+        const byEmp = {};
+        list.forEach(r => {
+            const k = String(r.employeeId||'');
+            if (!k) return;
+            if (!byEmp[k]) byEmp[k] = { approved: 0, pending: 0, rejected: 0, days: 0 };
+            if (r.status === 'approved') { byEmp[k].approved++; byEmp[k].days += Number(r.days)||0; }
+            else if (r.status === 'pending') byEmp[k].pending++;
+            else if (r.status === 'rejected') byEmp[k].rejected++;
+        });
+
+        let entries = Object.entries(byEmp).map(([id, c]) => {
+            const e = this.state.employees.find(emp => String(emp.id) === id);
+            return { id, name: e?.name || '?', active: !!(e && !e.resignDate), ...c };
+        }).filter(x => x.active);
+
+        const term = (this._apprStatsRankSearchTerm || '').trim().toLowerCase();
+        if (term) entries = entries.filter(x => x.name.toLowerCase().includes(term));
+
+        const sort = this._apprStatsRankSort || 'days_desc';
+        if (sort === 'days_desc') entries.sort((a,b) => b.days - a.days);
+        else if (sort === 'days_asc') entries.sort((a,b) => a.days - b.days);
+        else if (sort === 'count_desc') entries.sort((a,b) => (b.approved+b.pending+b.rejected) - (a.approved+a.pending+a.rejected));
+        else if (sort === 'name') entries.sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+
+        const el = document.getElementById('approval-stats-rank-list');
+        el.innerHTML = entries.length
+            ? entries.map(x => `<tr class="hover:bg-slate-50">
+                <td class="p-2.5 font-medium">${this._esc(x.name)}</td>
+                <td class="p-2.5 text-right text-green-600">${x.approved || '-'}</td>
+                <td class="p-2.5 text-right text-amber-600">${x.pending || '-'}</td>
+                <td class="p-2.5 text-right text-red-500">${x.rejected || '-'}</td>
+                <td class="p-2.5 text-right font-bold text-slate-800">${x.days}일</td>
+            </tr>`).join('')
+            : '<tr><td colspan="5" class="p-6 text-center text-slate-400 text-sm">해당 조건의 데이터가 없습니다.</td></tr>';
+    },
+
+    // 탭2: 월별 신청 건수 추이 (최근 12개월)
+    _renderApprovalStatsMonthly() {
+        const list = this.state.leaveRequests || [];
+        const countMap = {};
+        list.forEach(r => { const m = String(r.startDate||'').slice(0,7); if (m) countMap[m] = (countMap[m]||0)+1; });
+        const months = Object.keys(countMap).sort().slice(-12);
+        const maxCnt = months.length ? Math.max(...months.map(m=>countMap[m])) : 0;
+        const el = document.getElementById('approval-stats-monthly-panel');
+        el.innerHTML = months.length
+            ? months.map(m => {
+                const cnt = countMap[m];
+                const pct = maxCnt > 0 ? Math.round((cnt/maxCnt)*100) : 0;
+                return `<div class="flex items-center gap-3">
+                    <span class="w-16 text-xs text-slate-500 flex-shrink-0">${m}</span>
+                    <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-sky-400 rounded-full" style="width:${pct}%"></div></div>
+                    <span class="w-10 text-right text-sm font-bold text-sky-600 flex-shrink-0">${cnt}</span>
+                </div>`;
+            }).join('')
+            : '<p class="text-slate-400 text-sm text-center py-6">데이터 없음</p>';
     },
 
     renderEmployees(leaveStatus) {
