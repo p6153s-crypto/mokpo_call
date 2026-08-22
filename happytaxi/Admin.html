@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<!-- ============================================================
+     API 연결 설정: GAS 웹앱을 데이터 API 서버로 사용하기 위한 설정
+     아래 URL을 Apps Script "웹앱으로 배포" 후 발급된 실제 URL로 교체하세요.
+     (배포 > 새 배포 > 유형: 웹 앱 > 배포 후 나오는 .../exec 로 끝나는 주소)
+     ============================================================ -->
+<script>window.HCAB_API_URL = "https://script.google.com/macros/s/AKfycbwZr-t-UXT10Hb-yLNiSvPctSxNDrecucj2XekLQDNK1D8eU3upnC_To2jrAPeBK8hY/exec";</script>
+<script src="api-bridge.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 페이지 - 행복콜택시</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#0b0f1a; --surface:#131929; --surface2:#1c2438;
+    --border:rgba(255,255,255,0.07); --gold:#f5c518;
+    --text:#eef0f6; --muted:#7a849e;
+    --danger:#e06c6c; --success:#4ade80; --radius:12px;
+  }
+  body { font-family:'Noto Sans KR',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .wrap { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .page-header { display:flex; align-items:center; margin-bottom:28px; }
+  .page-header h1 { font-size:18px; font-weight:900; }
+  .tab-bar { display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; margin-bottom:24px; }
+  .tab-btn { flex:1; padding:9px 16px; border-radius:7px; font-size:13px; font-weight:700; font-family:inherit; border:none; cursor:pointer; transition:all .15s; background:transparent; color:var(--muted); }
+  .tab-btn.active { background:var(--surface2); color:var(--text); }
+  .tab-btn:hover:not(.active) { color:var(--text); }
+  .tab-panel { display:none; }
+  .tab-panel.active { display:block; }
+  .menu-list { display:flex; flex-direction:column; gap:10px; }
+  .menu-item { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; display:grid; grid-template-columns:10px 1fr auto; gap:14px; align-items:center; }
+  .menu-dot { width:10px; height:10px; border-radius:50%; background:var(--item-color,var(--gold)); flex-shrink:0; }
+  .setting-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; margin-bottom:12px; }
+  .setting-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .setting-head .s-icon { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:17px; background:var(--surface2); flex-shrink:0; }
+  .setting-head h3 { font-size:14px; font-weight:700; }
+  .setting-card p { font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.7; }
+  .setting-row { display:flex; gap:8px; align-items:center; }
+  .setting-input { flex:1; padding:10px 13px; border-radius:8px; background:var(--surface2); border:1px solid var(--border); color:var(--text); font-size:13px; font-family:inherit; outline:none; transition:border-color .15s; }
+  .setting-input:focus { border-color:var(--gold); }
+  .setting-input::placeholder { color:var(--muted); }
+  .key-status { font-size:11px; font-weight:700; padding:4px 11px; border-radius:20px; display:inline-flex; align-items:center; gap:5px; margin-top:12px; }
+  .key-status.set   { background:rgba(74,222,128,.12);  color:var(--success); border:1px solid rgba(74,222,128,.25); }
+  .key-status.unset { background:rgba(224,108,108,.12); color:var(--danger);  border:1px solid rgba(224,108,108,.25); }
+  .help-box { background:rgba(245,197,24,.05); border:1px solid rgba(245,197,24,.15); border-radius:10px; padding:14px 16px; margin-top:16px; font-size:12px; color:var(--muted); line-height:1.9; }
+  .help-box strong { color:var(--gold); }
+  .help-box ol { padding-left:16px; margin-top:6px; }
+  .help-box a { color:var(--gold); }
+  .btn-sm { padding:8px 14px; border-radius:7px; font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; font-family:inherit; transition:all .15s; white-space:nowrap; }
+  .btn-sm:hover { border-color:rgba(255,255,255,.15); color:var(--text); }
+  .btn-gold { background:var(--gold) !important; color:#000 !important; border-color:var(--gold) !important; }
+  .btn-gold:hover { opacity:.88; }
+  .btn-danger { color:var(--danger) !important; border-color:rgba(224,108,108,.3) !important; }
+  #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px); background:#222; color:#fff; padding:10px 22px; border-radius:20px; font-size:13px; opacity:0; transition:all .25s; pointer-events:none; z-index:999; white-space:nowrap; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center; }
+  .overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:32px; width:100%; max-width:480px; }
+  .modal h3 { font-size:16px; font-weight:900; margin-bottom:20px; }
+  .fg { margin-bottom:12px; }
+  .fg label { display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:5px; letter-spacing:.5px; text-transform:uppercase; }
+  .fg input, .fg textarea { width:100%; padding:10px 12px; border-radius:8px; background:var(--surface2); border:1px solid var(--border); color:var(--text); font-size:13px; font-family:inherit; outline:none; }
+  .fg textarea { min-height:72px; resize:vertical; }
+  .modal-footer { display:flex; gap:8px; margin-top:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-header">
+    <h1>⚙️ 관리자 페이지</h1>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-btn-menu"    onclick="switchTab('menu')">📎 메뉴 관리</button>
+    <button class="tab-btn"        id="tab-btn-setting" onclick="switchTab('setting')">🔗 연동 설정</button>
+  </div>
+
+  <!-- 탭1: 메뉴 관리 -->
+  <div class="tab-panel active" id="tab-menu">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+      <button class="btn-sm btn-gold" onclick="openModal()">+ 메뉴 추가</button>
+    </div>
+    <div class="menu-list" id="menu-list">
+      <div style="color:var(--muted);font-size:13px;padding:20px 0;">로딩 중…</div>
+    </div>
+  </div>
+
+  <!-- 탭2: 연동 설정 -->
+  <div class="tab-panel" id="tab-setting">
+    <div class="setting-card">
+      <div class="setting-head">
+        <div class="s-icon">🗨</div>
+        <h3>카카오톡 공유 설정</h3>
+      </div>
+      <p>공지사항을 카카오톡으로 공유할 때 필요한 JavaScript 앱 키를 설정합니다.</p>
+      <div class="setting-row">
+        <input class="setting-input" type="text" id="kakao-key-input"
+          placeholder="카카오 JavaScript 앱 키를 입력하세요"
+          onkeydown="if(event.key==='Enter') saveKakaoKey()">
+        <button class="btn-sm btn-gold" onclick="saveKakaoKey()">저장</button>
+        <button class="btn-sm btn-danger" onclick="clearKakaoKey()">삭제</button>
+      </div>
+      <div id="kakao-key-status"></div>
+      <div class="help-box">
+        <strong>앱 키 발급 방법</strong>
+        <ol>
+          <li><a href="https://developers.kakao.com" target="_blank">카카오 개발자 콘솔</a> 접속 후 로그인</li>
+          <li>내 애플리케이션 → 애플리케이션 추가하기</li>
+          <li>앱 설정 → 앱 키 → <strong>JavaScript 키</strong> 복사</li>
+          <li>플랫폼 → Web → 사이트 도메인에 이 웹앱 URL 등록<br><span style="font-size:11px;">(예: https://script.google.com)</span></li>
+          <li>위 입력란에 붙여넣기 후 저장</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<div class="overlay" id="modal" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3 id="modal-title">메뉴 추가</h3>
+    <input type="hidden" id="f-id">
+    <div class="fg"><label>아이콘 (이모지)</label><input type="text" id="f-icon" placeholder="예: 🚖"></div>
+    <div class="fg"><label>메뉴 이름 *</label><input type="text" id="f-name" placeholder="메뉴 이름"></div>
+    <div class="fg"><label>설명</label><textarea id="f-desc" placeholder="메뉴 설명"></textarea></div>
+    <div class="fg"><label>URL 주소</label><input type="url" id="f-url" placeholder="https://…"></div>
+    <div class="fg"><label>색상</label><input type="color" id="f-color" style="height:40px;cursor:pointer;"></div>
+    <div class="modal-footer">
+      <button class="btn-sm" style="flex:1" onclick="closeModal()">취소</button>
+      <button class="btn-sm btn-gold" style="flex:2" onclick="saveMenu()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let menus = [];
+
+window.onload = function() { loadMenus(); loadKakaoKey(); };
+
+// [BUG FIX] 확장성 있는 탭 전환 구현
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(function(btn) {
+    var btnTab = btn.id.replace('tab-btn-', '');
+    btn.classList.toggle('active', btnTab === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(function(panel) {
+    var panelTab = panel.id.replace('tab-', '');
+    panel.classList.toggle('active', panelTab === tab);
+  });
+}
+
+var _adminToastTimer = null;
+function toast(msg, type) {
+  // [BUG FIX] 연속 호출 시 타이머 겹침 방지
+  if (_adminToastTimer) clearTimeout(_adminToastTimer);
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = type === 'ok' ? '#1a5c2a' : type === 'err' ? '#5c1a1a' : '#222';
+  el.classList.add('show');
+  _adminToastTimer = setTimeout(function(){ el.classList.remove('show'); _adminToastTimer = null; }, 2800);
+}
+
+function loadMenus() {
+  google.script.run.withSuccessHandler(function(data) {
+    menus = data;
+    var list = document.getElementById('menu-list');
+    if (!data.length) { list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;">등록된 메뉴가 없습니다.</div>'; return; }
+    // [BUG FIX] 인라인 onclick 대신 data-id 속성으로 XSS 방지
+    list.innerHTML = data.map(function(m) {
+      return '<div class="menu-item" style="--item-color:' + (m.color||'#f5c518') + '">' +
+        '<div class="menu-dot"></div>' +
+        '<div><div style="font-size:13px;font-weight:700;">' + (m.icon||'') + ' ' + m.name + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + (m.url||'링크 없음') + '</div></div>' +
+        '<div style="display:flex;gap:6px;">' +
+        '<button class="btn-sm adm-edit-btn" data-id="' + m.id + '">수정</button>' +
+        '<button class="btn-sm btn-danger adm-del-btn" data-id="' + m.id + '">삭제</button>' +
+        '</div></div>';
+    }).join('');
+    // 이벤트 위임 바인딩
+    list.querySelectorAll('.adm-edit-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ openModal(this.dataset.id); });
+    });
+    list.querySelectorAll('.adm-del-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ deleteMenu(this.dataset.id); });
+    });
+  }).getMenus();
+}
+
+function openModal(id) {
+  // [BUG FIX] String 비교로 통일
+  var m = (id !== undefined && id !== null && id !== '') ? menus.find(function(x){ return String(x.id)===String(id); }) : null;
+  document.getElementById('modal-title').textContent = m ? '메뉴 수정' : '메뉴 추가';
+  document.getElementById('f-id').value    = m ? m.id    : '';
+  document.getElementById('f-icon').value  = m ? m.icon  : '';
+  document.getElementById('f-name').value  = m ? m.name  : '';
+  document.getElementById('f-desc').value  = m ? m.desc  : '';
+  document.getElementById('f-url').value   = m ? m.url   : '';
+  document.getElementById('f-color').value = m ? (m.color||'#f5c518') : '#f5c518';
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+function saveMenu() {
+  var name = document.getElementById('f-name').value.trim();
+  if (!name) { toast('메뉴 이름을 입력하세요.', 'err'); return; }
+  google.script.run
+    .withSuccessHandler(function(){ closeModal(); loadMenus(); toast('저장되었습니다 ✓', 'ok'); })
+    .withFailureHandler(function(e){ toast('저장 실패: ' + e.message, 'err'); })
+    .saveMenu({ id:document.getElementById('f-id').value, icon:document.getElementById('f-icon').value, name:name, desc:document.getElementById('f-desc').value, url:document.getElementById('f-url').value, color:document.getElementById('f-color').value });
+}
+
+function deleteMenu(id) {
+  if (!confirm('이 메뉴를 삭제하시겠습니까?')) return;
+  google.script.run
+    .withSuccessHandler(function(){ loadMenus(); toast('삭제되었습니다', ''); })
+    .withFailureHandler(function(e){ toast('삭제 실패: ' + e.message, 'err'); })
+    .deleteMenu(id);
+}
+
+function loadKakaoKey() {
+  google.script.run.withSuccessHandler(function(key) {
+    var input  = document.getElementById('kakao-key-input');
+    var status = document.getElementById('kakao-key-status');
+    if (key) {
+      // [BUG FIX] 기존 키 값을 플레이스홀더에 숨겨두면 실제 키와 혼동될 수 있어 코드로 분리
+      input.value = '';
+      input.placeholder = '새 앱 키 입력 (변경 시만 입력)';
+      status.innerHTML =
+        '<span class="key-status set">✓ 앱 키 등록됨</span>' +
+        '<code style="font-size:11px;color:var(--muted);margin-left:8px;">' + key.substring(0,8) + '••••••••••••••••</code>';
+    } else {
+      input.value = '';
+      input.placeholder = '카카오 JavaScript 앱 키를 입력하세요';
+      status.innerHTML = '<span class="key-status unset">✗ 미설정 — 카카오 공유 기능이 비활성화됩니다</span>';
+    }
+  }).getKakaoAppKey();
+}
+
+function saveKakaoKey() {
+  var key = document.getElementById('kakao-key-input').value.trim();
+  if (!key) { toast('앱 키를 입력하세요.', 'err'); return; }
+  google.script.run
+    .withSuccessHandler(function(res){ if(res.ok){ loadKakaoKey(); toast('카카오 앱 키가 저장되었습니다 ✓','ok'); } else toast('저장 실패','err'); })
+    .withFailureHandler(function(e){ toast('저장 실패: '+e.message,'err'); })
+    .saveKakaoAppKey(key);
+}
+
+function clearKakaoKey() {
+  if (!confirm('카카오 앱 키를 삭제하시겠습니까?\n삭제하면 카카오톡 공유 기능이 비활성화됩니다.')) return;
+  google.script.run
+    .withSuccessHandler(function(res){ if(res.ok){ document.getElementById('kakao-key-input').value=''; loadKakaoKey(); toast('앱 키가 삭제되었습니다',''); } })
+    .withFailureHandler(function(e){ toast('삭제 실패: '+e.message,'err'); })
+    .saveKakaoAppKey('');
+}
+</script>
+</body>
+</html>
