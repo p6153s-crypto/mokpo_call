@@ -1050,7 +1050,27 @@
             <button data-stat-tab="cross" class="sub-stat-tab px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-700">결근자→대체자</button>
         </div>
         <div class="overflow-y-auto flex-1 px-6 py-4 border-t border-slate-100">
-            <div id="sub-stats-rank-panel" class="space-y-1.5"></div>
+            <div id="sub-stats-rank-panel" class="space-y-3">
+                <div class="flex flex-wrap gap-2 items-center pb-3 border-b border-slate-100">
+                    <div class="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                        <button data-rank-period="all" class="rank-period-btn px-3 py-1.5 text-xs font-semibold rounded-md bg-white shadow text-slate-800">전체</button>
+                        <button data-rank-period="monthly" class="rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800">월별</button>
+                        <button data-rank-period="yearly" class="rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800">연별</button>
+                    </div>
+                    <input type="month" id="sub-stats-rank-month" class="hidden border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                    <select id="sub-stats-rank-year" class="hidden border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none"></select>
+                    <div class="relative flex-1 min-w-[140px]">
+                        <span class="absolute inset-y-0 left-2.5 flex items-center text-slate-400 text-xs">🔍</span>
+                        <input type="text" id="sub-stats-rank-search" placeholder="이름 검색..." class="pl-7 pr-2 py-1.5 border border-slate-300 rounded-lg w-full text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                    </div>
+                    <select id="sub-stats-rank-sort" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                        <option value="desc">횟수 많은순</option>
+                        <option value="asc">횟수 적은순</option>
+                        <option value="name">이름순</option>
+                    </select>
+                </div>
+                <div id="sub-stats-rank-list" class="space-y-1.5"></div>
+            </div>
             <div id="sub-stats-monthly-panel" class="hidden space-y-2"></div>
             <div id="sub-stats-cross-panel" class="hidden space-y-1.5"></div>
         </div>
@@ -1456,6 +1476,10 @@ const App = {
             absenceWithoutSubList: document.getElementById('absence-without-sub-list'),
             substitutionModal: document.getElementById('substitution-modal'),
             subStatsModal: document.getElementById('sub-stats-modal'),
+            subStatsRankMonth: document.getElementById('sub-stats-rank-month'),
+            subStatsRankYear: document.getElementById('sub-stats-rank-year'),
+            subStatsRankSearch: document.getElementById('sub-stats-rank-search'),
+            subStatsRankSort: document.getElementById('sub-stats-rank-sort'),
             substitutionForm: document.getElementById('substitution-form'),
             subWorkDate: document.getElementById('sub-work-date'),
             subAbsentee: document.getElementById('sub-absentee'),
@@ -1704,6 +1728,13 @@ const App = {
         document.querySelectorAll('.sub-stat-tab').forEach(btn => {
             btn.addEventListener('click', () => this._switchSubStatTab(btn.dataset.statTab));
         });
+        document.querySelectorAll('.rank-period-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._switchSubStatsRankPeriod(btn.dataset.rankPeriod));
+        });
+        this.dom.subStatsRankMonth.addEventListener('change', e => { this._subStatsRankValue = e.target.value; this._renderSubStatsRank(); });
+        this.dom.subStatsRankYear.addEventListener('change', e => { this._subStatsRankValue = e.target.value; this._renderSubStatsRank(); });
+        this.dom.subStatsRankSearch.addEventListener('input', e => { this._subStatsRankSearchTerm = e.target.value; this._renderSubStatsRank(); });
+        this.dom.subStatsRankSort.addEventListener('change', e => { this._subStatsRankSort = e.target.value; this._renderSubStatsRank(); });
 
         // 엑셀 저장 패널 토글
         document.getElementById('btn-sub-excel').addEventListener('click', () => {
@@ -2703,15 +2734,17 @@ const App = {
             return `<tr class="hover:bg-slate-50"><td class="p-3 font-medium border-r border-slate-100">${this._esc(emp.name)}<br><span class="text-xs text-slate-400">${this._esc(emp.department||"")}</span></td><td class="p-3 text-slate-600 border-r border-slate-100">${emp.joinDate||"-"}</td><td class="p-3 text-xs text-slate-500 border-r border-slate-100">${periodStart} ~ ${periodEnd}</td><td class="p-3 text-right font-bold text-slate-700 border-r border-slate-100">${emp.total.toFixed(1)}</td><td class="p-3 text-right font-bold text-blue-600 bg-blue-50/50 border-r border-slate-100">${specific||'-'}</td><td class="p-3 text-right font-bold text-slate-600 border-r border-slate-100">${emp.used}</td><td class="p-3 text-right font-bold text-green-600 border-r border-slate-100">${emp.remaining.toFixed(1)}</td><td class="p-3 text-center border-r border-slate-100">${subCount>0?`<span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">${subCount}회</span>`:'-'}</td><td class="p-3 text-center"><button class="detail-btn bg-white hover:bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded border shadow-sm" data-emp-id="${emp.id}" data-emp-name="${this._esc(emp.name)}">📋 내역</button></td></tr>`;
         }).join('') || '<tr><td colspan="9" class="p-8 text-center text-slate-400">데이터가 없습니다.</td></tr>';
 
-        // 선택 기간 기준 대체근무 횟수 순위
+        // 선택 기간 기준 대체근무 횟수 순위 (전환/비활성화 및 삭제된 대상 제외)
         const periodSubs = (this.state.substitutions||[]).filter(s=>String(s.workDate).startsWith(target));
         const countMap = {};
         periodSubs.forEach(s => { const k = String(s.substituteId); if(k) countMap[k] = (countMap[k]||0)+1; });
-        const ranked = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+        const ranked = Object.entries(countMap)
+            .map(([id, cnt]) => [id, cnt, this.state.employees.find(emp=>String(emp.id)===id)])
+            .filter(([,,e]) => e && !e.resignDate)
+            .sort((a,b)=>b[1]-a[1]).slice(0,5);
         document.getElementById('stats-rank-period-label').textContent = isYearly ? `(${target}년)` : `(${target})`;
         document.getElementById('stats-sub-rank-list').innerHTML = ranked.length
-            ? ranked.map(([id, cnt], i) => {
-                const e = this.state.employees.find(emp=>String(emp.id)===id);
+            ? ranked.map(([id, cnt, e], i) => {
                 const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
                 return `<div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg"><div class="flex items-center gap-2"><span class="text-lg">${medals[i]||'  '}</span><span class="font-medium text-sm">${this._esc(e?.name||'?')}</span></div><span class="bg-indigo-100 text-indigo-700 font-bold text-sm px-3 py-0.5 rounded-full">${cnt}회</span></div>`;
             }).join('')
@@ -2777,13 +2810,15 @@ const App = {
             }).join('')
             : '<tr><td colspan="6" class="p-10 text-center text-slate-400">대체근무 내역이 없습니다.</td></tr>';
 
-        // 대체근무 횟수 순위
+        // 대체근무 횟수 순위 (전환/비활성화 및 삭제된 대상 제외)
         const countMap = {};
         subs.forEach(s => { const k = String(s.substituteId); countMap[k] = (countMap[k]||0)+1; });
-        const ranked = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+        const ranked = Object.entries(countMap)
+            .map(([id, cnt]) => [id, cnt, this.state.employees.find(emp=>String(emp.id)===id)])
+            .filter(([,,e]) => e && !e.resignDate)
+            .sort((a,b)=>b[1]-a[1]).slice(0,5);
         this.dom.subRankList.innerHTML = ranked.length
-            ? ranked.map(([id, cnt], i) => {
-                const e = this.state.employees.find(emp=>String(emp.id)===id);
+            ? ranked.map(([id, cnt, e], i) => {
                 const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
                 return `<div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg"><div class="flex items-center gap-2"><span class="text-lg">${medals[i]||'  '}</span><span class="font-medium text-sm">${this._esc(e?.name||'?')}</span></div><span class="bg-indigo-100 text-indigo-700 font-bold text-sm px-3 py-0.5 rounded-full">${cnt}회</span></div>`;
             }).join('')
@@ -2807,6 +2842,19 @@ const App = {
     // 대체근무 통계 모달
     //
     openSubStatsModal() {
+        // 연도 선택 목록 초기화 (최초 1회)
+        if (!this.dom.subStatsRankYear.options.length) {
+            const curYear = new Date().getFullYear();
+            for (let y = curYear; y >= curYear - 5; y--) this.dom.subStatsRankYear.add(new Option(y + '년', y));
+        }
+        if (!this._subStatsRankPeriod) {
+            this._subStatsRankPeriod = 'all';
+            this._subStatsRankSort = 'desc';
+            this._subStatsRankSearchTerm = '';
+            const today = this.state.today || this.toLocalISO(new Date());
+            this.dom.subStatsRankMonth.value = today.slice(0,7);
+            this._subStatsRankValue = today.slice(0,7);
+        }
         this._switchSubStatTab('rank');
         this.dom.subStatsModal.classList.remove('hidden');
     },
@@ -2828,28 +2876,61 @@ const App = {
         else if (tab === 'cross') this._renderSubStatsCross();
     },
 
-    // 탭1: 전체 기사 대체근무 횟수 순위 (상위 5명 제한 없이 전체)
+    // 순위 탭의 기간 모드(전체/월별/연별) 전환
+    _switchSubStatsRankPeriod(period) {
+        this._subStatsRankPeriod = period;
+        document.querySelectorAll('.rank-period-btn').forEach(btn => {
+            const active = btn.dataset.rankPeriod === period;
+            btn.className = `rank-period-btn px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                active ? 'bg-white shadow text-slate-800 font-semibold' : 'text-slate-500 hover:text-slate-800'}`;
+        });
+        this.dom.subStatsRankMonth.classList.toggle('hidden', period !== 'monthly');
+        this.dom.subStatsRankYear.classList.toggle('hidden', period !== 'yearly');
+        if (period === 'monthly') this._subStatsRankValue = this.dom.subStatsRankMonth.value;
+        else if (period === 'yearly') this._subStatsRankValue = this.dom.subStatsRankYear.value;
+        this._renderSubStatsRank();
+    },
+
+    // 탭1: 대체근무자 순위 — 전체/월별/연별 + 이름 검색 + 정렬
     _renderSubStatsRank() {
-        const subs = this.state.substitutions || [];
+        const period = this._subStatsRankPeriod || 'all';
+        const value  = this._subStatsRankValue || '';
+        let subs = this.state.substitutions || [];
+        if (period === 'monthly' && value) subs = subs.filter(s => String(s.workDate||'').startsWith(value));
+        else if (period === 'yearly' && value) subs = subs.filter(s => String(s.workDate||'').startsWith(String(value)));
+
         const countMap = {};
         subs.forEach(s => { const k = String(s.substituteId||''); if (k) countMap[k] = (countMap[k]||0)+1; });
-        const ranked = Object.entries(countMap).sort((a,b)=>b[1]-a[1]);
-        const maxCnt = ranked.length ? ranked[0][1] : 0;
+
+        let entries = Object.entries(countMap).map(([id, cnt]) => {
+            const e = this.state.employees.find(emp => String(emp.id) === id);
+            return { id, cnt, name: e?.name || '?', active: !!(e && !e.resignDate) };
+        }).filter(x => x.active);
+
+        const term = (this._subStatsRankSearchTerm || '').trim().toLowerCase();
+        if (term) entries = entries.filter(x => x.name.toLowerCase().includes(term));
+
+        const sort = this._subStatsRankSort || 'desc';
+        if (sort === 'desc') entries.sort((a,b) => b.cnt - a.cnt);
+        else if (sort === 'asc') entries.sort((a,b) => a.cnt - b.cnt);
+        else if (sort === 'name') entries.sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+
+        const maxCnt = entries.length ? Math.max(...entries.map(x=>x.cnt)) : 0;
         const medals = ['🥇','🥈','🥉'];
-        const el = document.getElementById('sub-stats-rank-panel');
-        el.innerHTML = ranked.length
-            ? `<p class="text-xs text-slate-400 mb-2">총 ${ranked.length}명 · 전체 ${subs.length}건</p>` +
-              ranked.map(([id, cnt], i) => {
-                const e = this.state.employees.find(emp=>String(emp.id)===id);
-                const pct = maxCnt > 0 ? Math.round((cnt/maxCnt)*100) : 0;
+        const el = document.getElementById('sub-stats-rank-list');
+        el.innerHTML = entries.length
+            ? `<p class="text-xs text-slate-400 mb-2">총 ${entries.length}명 · ${subs.length}건 (${period==='all'?'전체 기간':period==='monthly'?value+' 월별':value+'년 연별'})</p>` +
+              entries.map((x, i) => {
+                const pct = maxCnt > 0 ? Math.round((x.cnt/maxCnt)*100) : 0;
+                const rankIcon = sort === 'desc' ? (medals[i] || (i+1)) : (i+1);
                 return `<div class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
-                    <span class="w-6 text-center text-sm flex-shrink-0">${medals[i] || (i+1)}</span>
-                    <span class="w-20 truncate text-sm font-medium flex-shrink-0">${this._esc(e?.name||'?')}</span>
+                    <span class="w-6 text-center text-sm flex-shrink-0">${rankIcon}</span>
+                    <span class="w-20 truncate text-sm font-medium flex-shrink-0">${this._esc(x.name)}</span>
                     <div class="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-400 rounded-full" style="width:${pct}%"></div></div>
-                    <span class="w-12 text-right text-sm font-bold text-indigo-600 flex-shrink-0">${cnt}회</span>
+                    <span class="w-12 text-right text-sm font-bold text-indigo-600 flex-shrink-0">${x.cnt}회</span>
                 </div>`;
             }).join('')
-            : '<p class="text-slate-400 text-sm text-center py-6">데이터 없음</p>';
+            : '<p class="text-slate-400 text-sm text-center py-6">해당 조건의 데이터가 없습니다.</p>';
     },
 
     // 탭2: 월별 대체근무 건수 추이 (최근 12개월)
