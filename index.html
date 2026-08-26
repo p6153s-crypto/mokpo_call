@@ -829,7 +829,7 @@
                         <div><label class="block text-xs font-semibold text-slate-600 mb-1">차량번호</label><input type="text" id="new-department" maxlength="100" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm"></div>
                         <div id="new-join-date-wrap"><label class="block text-xs font-semibold text-slate-600 mb-1">입사일 <span class="text-red-500">*</span></label><input type="date" id="new-join-date" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm"></div>
                         <div id="new-birth-date-wrap"><label class="block text-xs font-semibold text-slate-600 mb-1">생년월일 (비밀번호) <span class="text-red-500">*</span></label><input type="date" id="new-birth-date" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm"></div>
-                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">관리자 비밀번호 <span class="text-red-500">*</span></label><input type="password" id="new-emp-admin-password" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm" placeholder="비밀번호 입력" required></div>
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">최고관리자 비밀번호 <span class="text-red-500">*</span></label><input type="password" id="new-emp-admin-password" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm" placeholder="비밀번호 입력" required></div>
                         <p id="add-emp-error" class="text-red-500 text-xs hidden"></p>
                         <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">추가하기</button>
                     </form>
@@ -894,7 +894,7 @@
                     <form id="addSubEmpForm" class="space-y-3">
                         <div><label class="block text-xs font-semibold text-slate-600 mb-1">이름 <span class="text-red-500">*</span></label><input type="text" id="new-sub-emp-name" maxlength="50" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm" required></div>
                         <div><label class="block text-xs font-semibold text-slate-600 mb-1">차량번호 / 메모</label><input type="text" id="new-sub-emp-department" maxlength="100" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm"></div>
-                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">관리자 비밀번호 <span class="text-red-500">*</span></label><input type="password" id="new-sub-emp-admin-password" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm" placeholder="비밀번호 입력" required></div>
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">최고관리자 비밀번호 <span class="text-red-500">*</span></label><input type="password" id="new-sub-emp-admin-password" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm" placeholder="비밀번호 입력" required></div>
                         <p id="add-sub-emp-error" class="text-red-500 text-xs hidden"></p>
                         <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">추가하기</button>
                     </form>
@@ -1279,7 +1279,7 @@
                 <input type="date" id="retire-date-input" class="block w-full rounded-lg border border-slate-300 p-2.5 text-sm shadow-sm focus:ring-2 focus:ring-red-300 focus:outline-none">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">관리자 비밀번호 <span class="text-red-500">*</span></label>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">최고관리자 비밀번호 <span class="text-red-500">*</span></label>
                 <input type="password" id="retire-password" class="block w-full rounded-lg border border-slate-300 p-2.5 text-sm shadow-sm focus:ring-2 focus:ring-red-300 focus:outline-none" placeholder="비밀번호 입력">
             </div>
             <p id="retire-error" class="text-red-500 text-xs hidden"></p>
@@ -1936,7 +1936,7 @@ const App = {
         document.getElementById('confirm-retire-btn').addEventListener('click', () => {
             const pwd = this.dom.retirePassword.value;
             this.dom.retireError.classList.add('hidden');
-            if (!pwd) { this.dom.retireError.textContent = '관리자 비밀번호를 입력해주세요.'; this.dom.retireError.classList.remove('hidden'); return; }
+            if (!pwd) { this.dom.retireError.textContent = '최고관리자 비밀번호를 입력해주세요.'; this.dom.retireError.classList.remove('hidden'); return; }
             if (this.state.pendingReinstate) {
                 const rid = this.state.pendingReinstate;
                 this.callServer('reinstateEmployee', [rid, pwd]);
@@ -1978,7 +1978,7 @@ const App = {
             const dept     = document.getElementById('new-sub-emp-department').value.trim();
             const password = document.getElementById('new-sub-emp-admin-password').value;
             if (!name)     { errEl.textContent = '이름을 입력해주세요.'; errEl.classList.remove('hidden'); return; }
-            if (!password) { errEl.textContent = '관리자 비밀번호를 입력해주세요.'; errEl.classList.remove('hidden'); return; }
+            if (!password) { errEl.textContent = '최고관리자 비밀번호를 입력해주세요.'; errEl.classList.remove('hidden'); return; }
             this.callServer('addEmployee', [{ name, department: dept, role: 'substitute', joinDate: '', birthDate: '' }, password]);
         });
 
@@ -4440,7 +4440,7 @@ const App = {
         const password  = document.getElementById('new-emp-admin-password').value;
         if (!name)     return this.showToast('이름을 입력해주세요.', 'error');
         if (!joinDate) return this.showToast('입사일을 입력해주세요.', 'error');
-        if (!password) return this.showToast('관리자 비밀번호를 입력해주세요.', 'error');
+        if (!password) return this.showToast('최고관리자 비밀번호를 입력해주세요.', 'error');
         // 폼 초기화는 handleServerSuccess 성공 후 처리
         this.callServer('addEmployee', [{ name, department: dept, joinDate, birthDate, role: 'user', calculationMethod: this.state.settings?.leaveCalculationMethod || 'joinDate' }, password]);
     },
