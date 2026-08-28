@@ -2788,11 +2788,15 @@ const App = {
     },
 
     renderRequestForm(leaveStatus) {
-        // 재직자만 신청자 목록에 표시
-        const activeDrivers = this.state.employees.filter(e => e.role !== 'substitute' && !e.resignDate);
+        const isAdmin = this.state.isAdminAuthenticated;
+        // 재직자만 신청자 목록에 표시 — 일반 기사 로그인은 본인만 선택 가능 (개인정보 보호)
+        let activeDrivers = this.state.employees.filter(e => e.role !== 'substitute' && !e.resignDate);
+        if (!isAdmin) activeDrivers = activeDrivers.filter(e => String(e.id) === String(this.state.loginEmployeeId));
         this.dom.employeeNameSelect.innerHTML = activeDrivers.map(e =>
             `<option value="${e.id}" ${String(e.id)===String(this.state.currentUser)?'selected':''}>${this._esc(e.name)}</option>`
         ).join('');
+        this.dom.employeeNameSelect.disabled = !isAdmin;
+        document.getElementById('leave-name-toggle-btn').classList.toggle('hidden', !isAdmin);
         // 현재 선택된 종류 버튼 스타일 유지
         this._applyLeaveTypeBtn(this.dom.leaveTypeSelect.value || '연차');
         // 연차현황 + 신청목록 갱신
