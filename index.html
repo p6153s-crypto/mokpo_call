@@ -2305,12 +2305,17 @@ const App = {
         this.dom.adminLoginBtnMobile.textContent = isAdmin ? roleLabel : '관리자';
 
         // nav: admin 이상 메뉴 표시 (승인·대체·통계)
+        // class 토글만으로는 "hidden sm:flex"처럼 반응형 표시 클래스를 함께 쓰는 요소에서
+        // sm:flex가 hidden을 이겨버려 데스크톱 너비에서 계속 보이는 문제가 있었음.
+        // class 토글(다른 단순 요소들 정상 동작용) + 인라인 style(항상 최우선 적용, 충돌 요소 확실히 차단용) 을 함께 사용한다.
         document.querySelectorAll('[data-role="admin"]').forEach(el => {
             el.classList.toggle('hidden', !isAdmin);
+            el.style.display = isAdmin ? '' : 'none';
         });
         // nav: super 전용 메뉴 표시 (직원관리)
         document.querySelectorAll('[data-role="super"]').forEach(el => {
             el.classList.toggle('hidden', !isSuper);
+            el.style.display = isSuper ? '' : 'none';
         });
 
         this.updateView();
