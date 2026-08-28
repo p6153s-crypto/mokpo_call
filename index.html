@@ -263,6 +263,23 @@
             </label>
             <p id="login-error" class="text-red-500 text-xs hidden"></p>
             <button type="submit" id="login-submit-btn" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors">로그인</button>
+            <p class="text-center pt-1">
+                <button type="button" id="show-admin-login-link" class="text-xs text-slate-400 underline hover:text-slate-600">🔑 사무직 관리자이신가요? 관리자 비밀번호로 로그인</button>
+            </p>
+        </form>
+
+        <!-- 관리자 전용 로그인 (기사 신분 없이 관리자 비밀번호만으로 로그인) -->
+        <form id="admin-only-login-form" class="hidden space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">관리자 비밀번호</label>
+                <input type="password" id="admin-only-password" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none" placeholder="비밀번호 입력" required autocomplete="current-password">
+                <p class="text-xs text-slate-400 mt-1">비밀번호 종류에 따라 관리자/최고관리자 권한이 자동 부여됩니다.</p>
+            </div>
+            <p id="admin-only-login-error" class="text-red-500 text-xs hidden"></p>
+            <button type="submit" id="admin-only-login-submit-btn" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-lg shadow-md transition-colors">관리자 로그인</button>
+            <p class="text-center pt-1">
+                <button type="button" id="show-driver-login-link" class="text-xs text-slate-400 underline hover:text-slate-600">← 기사님 로그인으로 돌아가기</button>
+            </p>
         </form>
     </div>
 </div>
@@ -1615,6 +1632,49 @@ const App = {
             try { localStorage.removeItem(this.LOGIN_STORAGE_KEY); } catch(e) {}
             location.reload();
         });
+
+        // 관리자 전용 로그인(기사 신분 없이) 화면 전환
+        document.getElementById('show-admin-login-link').addEventListener('click', () => {
+            this.dom.loginForm.classList.add('hidden');
+            this.dom.adminOnlyLoginForm.classList.remove('hidden');
+            this.dom.adminOnlyLoginError.classList.add('hidden');
+            this.dom.adminOnlyPassword.value = '';
+        });
+        document.getElementById('show-driver-login-link').addEventListener('click', () => {
+            this.dom.adminOnlyLoginForm.classList.add('hidden');
+            this.dom.loginForm.classList.remove('hidden');
+        });
+        this.dom.adminOnlyLoginForm.addEventListener('submit', e => {
+            e.preventDefault();
+            const password = this.dom.adminOnlyPassword.value;
+            this.dom.adminOnlyLoginError.classList.add('hidden');
+            if (!password) return this._showError(this.dom.adminOnlyLoginError, '관리자 비밀번호를 입력해주세요.');
+            this.performAdminOnlyLogin(password, false);
+        });
+    },
+
+    performAdminOnlyLogin(password, silent) {
+        const submitBtn = document.getElementById('admin-only-login-submit-btn');
+        if (!silent && submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '확인 중...'; }
+        google.script.run
+            .withSuccessHandler(data => {
+                if (!silent && submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '관리자 로그인'; }
+                this.state.loginEmployeeId = null;
+                this.state.loginBirthDate = null;
+                this.state.adminOnlyPassword = password;
+                this.state.isAdminAuthenticated = true;
+                this.state.adminRole = data.__adminRole || 'admin';
+                this.dom.loginScreen.classList.add('hidden');
+                this.dom.logoutBtn.classList.remove('hidden');
+                this.dom.logoutBtn.classList.add('flex');
+                this._applyServerData(data, null);
+                this.startAutoRefresh();
+            })
+            .withFailureHandler(err => {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '관리자 로그인'; }
+                this._showError(this.dom.adminOnlyLoginError, err.message || '로그인에 실패했습니다.');
+            })
+            .loginAdmin(password);
     },
 
     performLogin(employeeId, birthDate, autoLogin, silent) {
@@ -1673,14 +1733,15 @@ const App = {
             if (anyModalOpen) return;
             if (!this.dom.app || this.dom.app.classList.contains('hidden')) return;
 
-            google.script.run
+            const runner = google.script.run
                 .withSuccessHandler(data => {
                     if (!data || data.error) return;
                     this.state = { ...this.state, ...data, holidays: new Set(data.holidays||[]) };
                     this.render();
                 })
-                .withFailureHandler(() => {}) // 네트워크 오류 시 조용히 무시, 다음 주기에 재시도
-                .getServerData(this.state.loginEmployeeId, this.state.loginBirthDate);
+                .withFailureHandler(() => {}); // 네트워크 오류 시 조용히 무시, 다음 주기에 재시도
+            if (this.state.loginEmployeeId) runner.getServerData(this.state.loginEmployeeId, this.state.loginBirthDate);
+            else if (this.state.adminOnlyPassword) runner.getServerDataAsAdmin(this.state.adminOnlyPassword);
         }, INTERVAL_MS);
     },
 
@@ -1695,6 +1756,9 @@ const App = {
             loginBirthDate: document.getElementById('login-birth-date'),
             loginAutoCheckbox: document.getElementById('login-auto-checkbox'),
             loginError: document.getElementById('login-error'),
+            adminOnlyLoginForm: document.getElementById('admin-only-login-form'),
+            adminOnlyPassword: document.getElementById('admin-only-password'),
+            adminOnlyLoginError: document.getElementById('admin-only-login-error'),
             logoutBtn: document.getElementById('logout-btn'),
             actionSpinner: document.getElementById('action-spinner'),
             mobileMenuBtn: document.getElementById('mobile-menu-btn'),
@@ -2275,7 +2339,7 @@ const App = {
 
     loadPastData(year) {
         this.dom.actionSpinner.classList.remove('hidden');
-        google.script.run
+        const runner = google.script.run
             .withSuccessHandler(data => {
                 this.dom.actionSpinner.classList.add('hidden');
                 if (data?.length > 0) {
@@ -2287,8 +2351,9 @@ const App = {
                 document.getElementById('btn-load-past-data').classList.add('hidden');
                 this.renderStatsTable();
             })
-            .withFailureHandler(e => { this.dom.actionSpinner.classList.add('hidden'); this.showToast('로드 실패: '+e.message, 'error'); })
-            .getPastData(year, this.state.loginEmployeeId, this.state.loginBirthDate);
+            .withFailureHandler(e => { this.dom.actionSpinner.classList.add('hidden'); this.showToast('로드 실패: '+e.message, 'error'); });
+        if (this.state.loginEmployeeId) runner.getPastData(year, this.state.loginEmployeeId, this.state.loginBirthDate);
+        else if (this.state.adminOnlyPassword) runner.getPastDataAsAdmin(year, this.state.adminOnlyPassword);
     },
 
     //
@@ -4740,6 +4805,15 @@ const App = {
                     }
                 }, 400);
             },
+            loginAdmin(password){
+                const f=this._f;
+                setTimeout(()=>{
+                    if (password === 'admin') { this.getServerData(); }
+                    else if (f) f(new Error('관리자 비밀번호가 일치하지 않습니다. (개발용: admin)'));
+                }, 400);
+            },
+            getServerDataAsAdmin(password){ this.getServerData(); },
+            getPastDataAsAdmin(y, password){ this.getPastData(y); },
         }}};
     }
 };
