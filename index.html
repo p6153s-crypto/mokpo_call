@@ -445,7 +445,7 @@
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between mb-4 gap-3">
-                <h3 class="text-lg font-bold">📊 내 연차 현황<span id="my-status-name" class="text-sky-600 ml-1"></span></h3>
+                <h3 id="my-status-heading" class="text-lg font-bold cursor-pointer hover:text-sky-600 transition-colors" title="클릭하면 상세 내역을 볼 수 있어요">📊 내 연차 현황<span id="my-status-name" class="text-sky-600 ml-1"></span> <span class="text-xs font-normal text-slate-400">(클릭 시 상세보기)</span></h3>
                 <div class="relative hidden" id="driver-search-wrapper" data-role="admin">
                     <button id="driver-search-btn" class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg border border-slate-200 transition-colors">
                         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
@@ -1472,6 +1472,14 @@
         <div class="overflow-y-auto flex-1 px-6 py-4">
             <!-- 연차 내역 탭 -->
             <div id="ddm-leave-panel">
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <div class="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                        <button data-ddm-period="all" class="ddm-period-btn px-3 py-1.5 text-xs font-semibold rounded-md bg-white shadow text-slate-800">전체</button>
+                        <button data-ddm-period="monthly" class="ddm-period-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800">월별</button>
+                    </div>
+                    <input type="month" id="ddm-month-picker" class="hidden border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-sky-300 focus:outline-none">
+                    <span class="text-xs text-slate-400 ml-auto">총 사용일수: <b id="ddm-filtered-total" class="text-slate-700">0일</b></span>
+                </div>
                 <table class="w-full text-sm">
                     <thead class="sticky top-0 bg-white"><tr class="border-b border-slate-200">
                         <th class="py-2 pr-3 text-left text-xs font-semibold text-slate-500">종류</th>
@@ -2222,6 +2230,20 @@ const App = {
         document.getElementById('btn-print-detail').addEventListener('click', () => this.printDetail());
         document.getElementById('btn-download-detail').addEventListener('click', () => this.downloadDetailCSV());
 
+        // "내 연차 현황" 제목 클릭 시 상세 내역 모달 오픈
+        document.getElementById('my-status-heading').addEventListener('click', () => {
+            const empId = this.state.dashboardSelectedUser || this.state.currentUser;
+            if (empId) this.openDriverDetailModal(empId);
+        });
+        // 상세 모달 내 연차 내역 전체/월별 필터
+        document.querySelectorAll('.ddm-period-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._switchDdmPeriod(btn.dataset.ddmPeriod));
+        });
+        document.getElementById('ddm-month-picker').addEventListener('change', e => {
+            this._ddmMonth = e.target.value;
+            this._renderDdmLeaveTable();
+        });
+
         // 대체근무
         document.getElementById('btn-add-substitution').addEventListener('click', () => this.openSubModal());
         document.getElementById('btn-sub-stats').addEventListener('click', () => this.openSubStatsModal());
@@ -2712,6 +2734,11 @@ const App = {
     },
 
     openDriverDetailModal(empId) {
+        this._ddmEmpId = empId;
+        if (!this._ddmPeriod) {
+            this._ddmPeriod = 'all';
+            this._ddmMonth = this.state.today ? this.state.today.slice(0,7) : new Date().toISOString().slice(0,7);
+        }
         // 퇴사자는 getLeaveStatus() 대신 employees에서 직접 조회
         const leaveStatus = this.getLeaveStatus();
         let emp = leaveStatus.find(e => e.id === empId);
@@ -2753,25 +2780,8 @@ const App = {
                 <p class="text-xl font-bold text-indigo-600">${(this.state.substitutions||[]).filter(s=>String(s.substituteId)===String(empId)).length}<span class="text-xs font-normal ml-0.5">회</span></p>
             </div>`;
 
-        // 연차 내역 테이블
-        const reqs = this.state.leaveRequests
-            .filter(r => String(r.employeeId) === String(empId))
-            .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
-
-        const statusLabel = s => s === 'approved' ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">승인</span>'
-                                : s === 'pending'  ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">대기</span>'
-                                :                    '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">반려</span>';
-        const typeColor = t => t === '결근' ? 'bg-red-100 text-red-700' : t === '반차' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
-
-        document.getElementById('ddm-leave-body').innerHTML = reqs.length
-            ? reqs.map(r => `<tr class="hover:bg-slate-50">
-                <td class="py-2.5 pr-3"><span class="text-xs font-bold px-2 py-0.5 rounded-full ${typeColor(r.type)}">${this._esc(r.type)}</span></td>
-                <td class="py-2.5 pr-3 text-slate-600 whitespace-nowrap">${r.startDate}${r.startDate !== r.endDate ? ' ~ ' + r.endDate : ''}</td>
-                <td class="py-2.5 pr-3 text-right font-bold text-slate-800">${r.days}일</td>
-                <td class="py-2.5 pr-3">${statusLabel(r.status)}</td>
-                <td class="py-2.5 text-slate-400 text-xs truncate max-w-[120px]">${this._esc(r.reason || '-')}</td>
-            </tr>`).join('')
-            : '<tr><td colspan="5" class="py-8 text-center text-slate-400 text-sm">연차 신청 내역이 없습니다.</td></tr>';
+        // 연차 내역 테이블 (전체/월별 필터 적용)
+        this._switchDdmPeriod(this._ddmPeriod);
 
         // 대체근무 테이블
         const subs = (this.state.substitutions || [])
@@ -2798,6 +2808,53 @@ const App = {
         // 연차 탭 초기화
         document.querySelector('[data-tab="leave"]').click();
         document.getElementById('driver-detail-modal').classList.remove('hidden');
+    },
+
+    // 상세 모달의 연차 내역 기간 필터(전체/월별) 전환
+    _switchDdmPeriod(period) {
+        this._ddmPeriod = period;
+        document.querySelectorAll('.ddm-period-btn').forEach(btn => {
+            const active = btn.dataset.ddmPeriod === period;
+            btn.className = `ddm-period-btn px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                active ? 'bg-white shadow text-slate-800 font-semibold' : 'text-slate-500 hover:text-slate-800'}`;
+        });
+        document.getElementById('ddm-month-picker').classList.toggle('hidden', period !== 'monthly');
+        if (period === 'monthly') {
+            const picker = document.getElementById('ddm-month-picker');
+            if (!picker.value) picker.value = this._ddmMonth;
+        }
+        this._renderDdmLeaveTable();
+    },
+
+    // 상세 모달의 연차 내역 테이블 렌더링 (전체/월별 필터 반영)
+    _renderDdmLeaveTable() {
+        const empId = this._ddmEmpId;
+        if (!empId) return;
+        let reqs = this.state.leaveRequests.filter(r => String(r.employeeId) === String(empId));
+        if (this._ddmPeriod === 'monthly') {
+            const month = document.getElementById('ddm-month-picker').value || this._ddmMonth;
+            reqs = reqs.filter(r => String(r.startDate||'').startsWith(month));
+        }
+        reqs = reqs.sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+
+        const statusLabel = s => s === 'approved' ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">승인</span>'
+                                : s === 'pending'  ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">대기</span>'
+                                :                    '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">반려</span>';
+        const typeColor = t => t === '결근' ? 'bg-red-100 text-red-700' : t === '반차' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+
+        document.getElementById('ddm-leave-body').innerHTML = reqs.length
+            ? reqs.map(r => `<tr class="hover:bg-slate-50">
+                <td class="py-2.5 pr-3"><span class="text-xs font-bold px-2 py-0.5 rounded-full ${typeColor(r.type)}">${this._esc(r.type)}</span></td>
+                <td class="py-2.5 pr-3 text-slate-600 whitespace-nowrap">${r.startDate}${r.startDate !== r.endDate ? ' ~ ' + r.endDate : ''}</td>
+                <td class="py-2.5 pr-3 text-right font-bold text-slate-800">${r.days}일</td>
+                <td class="py-2.5 pr-3">${statusLabel(r.status)}</td>
+                <td class="py-2.5 text-slate-400 text-xs truncate max-w-[120px]">${this._esc(r.reason || '-')}</td>
+            </tr>`).join('')
+            : '<tr><td colspan="5" class="py-8 text-center text-slate-400 text-sm">연차 신청 내역이 없습니다.</td></tr>';
+
+        const totalDays = reqs.filter(r => r.status === 'approved').reduce((s,r) => s + Number(r.days||0), 0);
+        const totalEl = document.getElementById('ddm-filtered-total');
+        if (totalEl) totalEl.textContent = totalDays.toFixed(1) + '일';
     },
 
     _renderSubstituteDropdown(query) {
