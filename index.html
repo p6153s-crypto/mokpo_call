@@ -758,7 +758,7 @@
         <div id="emp-panel-driver" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <!-- 재직/퇴사 서브 토글 -->
-                <div class="flex items-center justify-between px-5 py-3 border-b bg-sky-50">
+                <div class="flex items-center justify-between px-5 py-3 border-b bg-sky-50 gap-2 flex-wrap">
                     <div class="flex gap-1 bg-sky-100 p-0.5 rounded-lg">
                         <button id="driver-sub-tab-active" data-drivertab="active"
                             class="driver-sub-tab px-3 py-1.5 text-xs font-semibold rounded-md bg-white shadow text-sky-700 transition-all">
@@ -768,6 +768,18 @@
                             class="driver-sub-tab px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:bg-white/60 transition-all">
                             📤 퇴사 <span id="retired-count-badge" class="ml-1 text-xs bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full"></span>
                         </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-medium text-slate-500 whitespace-nowrap">정렬:</label>
+                        <select id="driver-sort-order" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-sky-400 focus:outline-none">
+                            <option value="name">이름순</option>
+                            <option value="join_desc">입사일 최신순</option>
+                            <option value="join_asc">입사일 오래된순</option>
+                            <option value="remaining_desc">잔여 많은순</option>
+                            <option value="remaining_asc">잔여 적은순</option>
+                            <option value="used_desc">사용 많은순</option>
+                            <option value="used_asc">사용 적은순</option>
+                        </select>
                     </div>
                 </div>
                 <!-- 재직자 테이블 -->
@@ -1548,6 +1560,7 @@ const App = {
         absenceFilterMonth: '',
         absenceFilterType: '',
         absenceSortOrder: 'date_desc',
+        driverSortOrder: 'name',
         noticeTargetDay: 'today',
         absenceType: '결근(무급)',
         dashboardSelectedUser: null,
@@ -1800,6 +1813,7 @@ const App = {
             approvalStatsRankSearch: document.getElementById('approval-stats-rank-search'),
             approvalStatsRankSort: document.getElementById('approval-stats-rank-sort'),
             employeeListTable: document.getElementById('employee-list-table'),
+            driverSortOrder: document.getElementById('driver-sort-order'),
             substituteEmpListTable: document.getElementById('substitute-emp-list-table'),
             substituteEmpInactiveListTable: document.getElementById('substitute-emp-inactive-list-table'),
             subEmpEditModal: document.getElementById('sub-emp-edit-modal'),
@@ -2018,6 +2032,7 @@ const App = {
                 document.getElementById('driver-retired-panel').classList.toggle('hidden', tab !== 'retired');
             });
         });
+        this.dom.driverSortOrder.addEventListener('change', e => { this.state.driverSortOrder = e.target.value; this.render(); });
 
         // 퇴사 처리 모달
         document.getElementById('cancel-retire-btn').addEventListener('click', () => {
@@ -3031,8 +3046,20 @@ const App = {
 
         // 기사(user) — 재직/퇴사 분리
         const allDriverStatus = leaveStatus.filter(e => e.role !== 'substitute');
-        const activeDrivers  = allDriverStatus.filter(e => !e.resignDate);
+        let activeDrivers  = allDriverStatus.filter(e => !e.resignDate);
         const retiredDrivers = this.state.employees.filter(e => e.role !== 'substitute' && e.resignDate);
+
+        const driverSort = this.state.driverSortOrder || 'name';
+        activeDrivers = [...activeDrivers].sort((a, b) => {
+            if (driverSort === 'name') return a.name.localeCompare(b.name, 'ko');
+            if (driverSort === 'join_desc') return String(b.joinDate||'').localeCompare(String(a.joinDate||''));
+            if (driverSort === 'join_asc') return String(a.joinDate||'').localeCompare(String(b.joinDate||''));
+            if (driverSort === 'remaining_desc') return b.remaining - a.remaining;
+            if (driverSort === 'remaining_asc') return a.remaining - b.remaining;
+            if (driverSort === 'used_desc') return b.used - a.used;
+            if (driverSort === 'used_asc') return a.used - b.used;
+            return 0;
+        });
 
         document.getElementById('driver-count-badge').textContent  = activeDrivers.length + '명';
         document.getElementById('retired-count-badge').textContent = retiredDrivers.length + '명';
