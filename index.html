@@ -263,7 +263,8 @@
             </label>
             <p id="login-error" class="text-red-500 text-xs hidden"></p>
             <button type="submit" id="login-submit-btn" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors">로그인</button>
-            <p class="text-center pt-1">
+            <p class="text-center pt-1 flex flex-col gap-1">
+                <button type="button" id="show-change-password-link" class="text-xs text-slate-400 underline hover:text-slate-600">🔒 비밀번호를 변경하고 싶으신가요?</button>
                 <button type="button" id="show-admin-login-link" class="text-xs text-slate-400 underline hover:text-slate-600">🔑 사무직 관리자이신가요? 관리자 비밀번호로 로그인</button>
             </p>
         </form>
@@ -279,6 +280,35 @@
             <button type="submit" id="admin-only-login-submit-btn" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-lg shadow-md transition-colors">관리자 로그인</button>
             <p class="text-center pt-1">
                 <button type="button" id="show-driver-login-link" class="text-xs text-slate-400 underline hover:text-slate-600">← 기사님 로그인으로 돌아가기</button>
+            </p>
+        </form>
+
+        <!-- 개인 비밀번호 변경 -->
+        <form id="change-password-form" class="hidden space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">기사님 성함</label>
+                <select id="cp-employee-select" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none">
+                    <option value="">불러오는 중...</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">현재 비밀번호</label>
+                <input type="text" id="cp-current-password" placeholder="생년월일 8자리 (예: 19800101) 또는 기존 비밀번호" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none" required>
+                <p class="text-xs text-slate-400 mt-1">아직 비밀번호를 바꾼 적이 없다면 생년월일 8자리를 입력하세요.</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">새 비밀번호</label>
+                <input type="text" id="cp-new-password" maxlength="30" placeholder="4자 이상으로 설정" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">새 비밀번호 확인</label>
+                <input type="text" id="cp-new-password-confirm" maxlength="30" placeholder="다시 입력" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none" required>
+            </div>
+            <p id="change-password-error" class="text-red-500 text-xs hidden"></p>
+            <p id="change-password-success" class="text-green-600 text-xs hidden"></p>
+            <button type="submit" id="change-password-submit-btn" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors">비밀번호 변경</button>
+            <p class="text-center pt-1">
+                <button type="button" id="show-driver-login-link-2" class="text-xs text-slate-400 underline hover:text-slate-600">← 기사님 로그인으로 돌아가기</button>
             </p>
         </form>
     </div>
@@ -1600,12 +1630,15 @@ const App = {
         google.script.run
             .withSuccessHandler(list => {
                 this._loginEmployeeList = list || [];
-                this.dom.loginEmployeeSelect.innerHTML = (list && list.length)
+                const optionsHtml = (list && list.length)
                     ? '<option value="">선택하세요</option>' + list.map(e => `<option value="${e.id}">${this._esc(e.name)}</option>`).join('')
                     : '<option value="">등록된 기사가 없습니다</option>';
+                this.dom.loginEmployeeSelect.innerHTML = optionsHtml;
+                this.dom.cpEmployeeSelect.innerHTML = optionsHtml;
             })
             .withFailureHandler(() => {
                 this.dom.loginEmployeeSelect.innerHTML = '<option value="">목록을 불러오지 못했습니다</option>';
+                this.dom.cpEmployeeSelect.innerHTML = '<option value="">목록을 불러오지 못했습니다</option>';
             })
             .getPublicEmployeeList();
     },
@@ -1663,6 +1696,51 @@ const App = {
             this.dom.adminOnlyLoginError.classList.add('hidden');
             if (!password) return this._showError(this.dom.adminOnlyLoginError, '관리자 비밀번호를 입력해주세요.');
             this.performAdminOnlyLogin(password, false);
+        });
+
+        // 개인 비밀번호 변경 화면 전환
+        document.getElementById('show-change-password-link').addEventListener('click', () => {
+            this.dom.loginForm.classList.add('hidden');
+            this.dom.changePasswordForm.classList.remove('hidden');
+            this.dom.changePasswordError.classList.add('hidden');
+            this.dom.changePasswordSuccess.classList.add('hidden');
+            this.dom.cpCurrentPassword.value = '';
+            this.dom.cpNewPassword.value = '';
+            this.dom.cpNewPasswordConfirm.value = '';
+        });
+        const backToDriverLogin = () => {
+            this.dom.changePasswordForm.classList.add('hidden');
+            this.dom.loginForm.classList.remove('hidden');
+        };
+        document.getElementById('show-driver-login-link-2').addEventListener('click', backToDriverLogin);
+        this.dom.changePasswordForm.addEventListener('submit', e => {
+            e.preventDefault();
+            this.dom.changePasswordError.classList.add('hidden');
+            this.dom.changePasswordSuccess.classList.add('hidden');
+            const employeeId = this.dom.cpEmployeeSelect.value;
+            const currentPw  = this.dom.cpCurrentPassword.value.trim();
+            const newPw      = this.dom.cpNewPassword.value.trim();
+            const newPwConfirm = this.dom.cpNewPasswordConfirm.value.trim();
+            if (!employeeId) return this._showError(this.dom.changePasswordError, '기사님을 선택해주세요.');
+            if (!currentPw)  return this._showError(this.dom.changePasswordError, '현재 비밀번호를 입력해주세요.');
+            if (newPw.length < 4) return this._showError(this.dom.changePasswordError, '새 비밀번호는 4자 이상이어야 합니다.');
+            if (newPw !== newPwConfirm) return this._showError(this.dom.changePasswordError, '새 비밀번호가 서로 일치하지 않습니다.');
+            const submitBtn = document.getElementById('change-password-submit-btn');
+            submitBtn.disabled = true; submitBtn.textContent = '변경 중...';
+            google.script.run
+                .withSuccessHandler(() => {
+                    submitBtn.disabled = false; submitBtn.textContent = '비밀번호 변경';
+                    this.dom.changePasswordSuccess.textContent = '비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.';
+                    this.dom.changePasswordSuccess.classList.remove('hidden');
+                    this.dom.cpCurrentPassword.value = '';
+                    this.dom.cpNewPassword.value = '';
+                    this.dom.cpNewPasswordConfirm.value = '';
+                })
+                .withFailureHandler(err => {
+                    submitBtn.disabled = false; submitBtn.textContent = '비밀번호 변경';
+                    this._showError(this.dom.changePasswordError, err.message || '비밀번호 변경에 실패했습니다.');
+                })
+                .changeMyPassword(employeeId, currentPw, newPw);
         });
     },
 
@@ -1772,6 +1850,13 @@ const App = {
             adminOnlyLoginForm: document.getElementById('admin-only-login-form'),
             adminOnlyPassword: document.getElementById('admin-only-password'),
             adminOnlyLoginError: document.getElementById('admin-only-login-error'),
+            changePasswordForm: document.getElementById('change-password-form'),
+            cpEmployeeSelect: document.getElementById('cp-employee-select'),
+            cpCurrentPassword: document.getElementById('cp-current-password'),
+            cpNewPassword: document.getElementById('cp-new-password'),
+            cpNewPasswordConfirm: document.getElementById('cp-new-password-confirm'),
+            changePasswordError: document.getElementById('change-password-error'),
+            changePasswordSuccess: document.getElementById('change-password-success'),
             logoutBtn: document.getElementById('logout-btn'),
             actionSpinner: document.getElementById('action-spinner'),
             mobileMenuBtn: document.getElementById('mobile-menu-btn'),
@@ -4845,6 +4930,13 @@ const App = {
                 }, 400);
             },
             getServerDataAsAdmin(password){ this.getServerData(); },
+            changeMyPassword(empId, current, newPw){
+                const s=this._s, f=this._f;
+                setTimeout(()=>{
+                    if (String(current).replace(/-/g,'') === '19900101' && empId === 'dev-emp-001') { s && s({ ok:true }); }
+                    else if (f) f(new Error('현재 비밀번호가 일치하지 않습니다. (개발용: 홍길동/19900101)'));
+                }, 400);
+            },
             getPastDataAsAdmin(y, password){ this.getPastData(y); },
         }}};
     }
