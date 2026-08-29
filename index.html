@@ -431,10 +431,17 @@
                 <div id="dashboard-pending-list" class="mt-2 space-y-2"></div>
             </div>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+        <!-- 전체 현황 (관리자 전용) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 hidden" data-role="admin">
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚕</span><div><h3 class="text-slate-500 font-medium text-sm">전체 기사</h3><p id="total-employees" class="text-3xl font-bold mt-1">0</p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">📥</span><div><h3 class="text-slate-500 font-medium text-sm">대기 건수</h3><p id="pending-requests" class="text-3xl font-bold mt-1 text-amber-500">0건</p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🔄</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 대체근무</h3><p id="this-month-subs" class="text-3xl font-bold mt-1 text-indigo-500">0건</p></div></div>
+        </div>
+        <!-- 이번달 내 현황 (일반 기사 로그인 시) -->
+        <div id="my-month-stats-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">✅</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 휴가 승인</h3><p id="my-month-approved" class="text-3xl font-bold mt-1 text-green-600">0건</p></div></div>
+            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚫</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 결근 (유급/무급)</h3><p id="my-month-absence" class="text-3xl font-bold mt-1 text-slate-600">0<span class="text-base font-medium text-amber-600">건</span> / 0<span class="text-base font-medium text-slate-400">건</span></p></div></div>
+            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">⏰</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 조퇴</h3><p id="my-month-early" class="text-3xl font-bold mt-1 text-orange-500">0건</p></div></div>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between mb-4 gap-3">
@@ -2540,6 +2547,23 @@ const App = {
 
         const curMonth = (this.state.today||this.toLocalISO(new Date())).slice(0,7);
         this.dom.thisMonthSubs.textContent = (this.state.substitutions||[]).filter(s => String(s.workDate).startsWith(curMonth)).length + '건';
+
+        // 전체 현황(관리자) vs 이번달 내 현황(일반 기사) 전환
+        const isAdminView = this.state.isAdminAuthenticated;
+        const myStatsGrid = document.getElementById('my-month-stats-grid');
+        if (myStatsGrid) myStatsGrid.style.display = isAdminView ? 'none' : '';
+        if (!isAdminView && this.state.loginEmployeeId) {
+            const uid = String(this.state.loginEmployeeId);
+            const myMonthReqs = this.state.leaveRequests.filter(r => String(r.employeeId) === uid && String(r.startDate||'').startsWith(curMonth));
+            const approvedCount = myMonthReqs.filter(r => r.status === 'approved' && (r.type==='연차' || r.type==='반차')).length;
+            const paidAbsence   = myMonthReqs.filter(r => r.type === '결근(유급)').length;
+            const unpaidAbsence = myMonthReqs.filter(r => r.type === '결근(무급)').length;
+            const earlyLeave    = myMonthReqs.filter(r => r.type === '조퇴').length;
+            document.getElementById('my-month-approved').textContent = approvedCount + '건';
+            document.getElementById('my-month-absence').innerHTML =
+                `${paidAbsence}<span class="text-base font-medium text-amber-600">건</span> / ${unpaidAbsence}<span class="text-base font-medium text-slate-400">건</span>`;
+            document.getElementById('my-month-early').textContent = earlyLeave + '건';
+        }
 
         const todayStr = this.state.today||this.toLocalISO(new Date());
         const tomorrowStr = (() => { const d = new Date(todayStr); d.setDate(d.getDate()+1); return this.toLocalISO(d); })();
