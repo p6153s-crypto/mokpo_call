@@ -441,7 +441,7 @@
         <div id="my-month-stats-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">✅</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 휴가 승인</h3><p id="my-month-approved" class="text-3xl font-bold mt-1 text-green-600">0건</p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚫</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 결근 (유급/무급)</h3><p id="my-month-absence" class="text-3xl font-bold mt-1 text-slate-600">0<span class="text-base font-medium text-amber-600">건</span> / 0<span class="text-base font-medium text-slate-400">건</span></p></div></div>
-            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">⏰</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 조퇴</h3><p id="my-month-early" class="text-3xl font-bold mt-1 text-orange-500">0건</p></div></div>
+            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">⏰</span><div><h3 class="text-slate-500 font-medium text-sm">조퇴 건수 (전체/이번달)</h3><p id="my-month-early" class="text-3xl font-bold mt-1 text-orange-500">0건 / 0건</p></div></div>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between mb-4 gap-3">
@@ -2554,15 +2554,17 @@ const App = {
         if (myStatsGrid) myStatsGrid.style.display = isAdminView ? 'none' : '';
         if (!isAdminView && this.state.loginEmployeeId) {
             const uid = String(this.state.loginEmployeeId);
-            const myMonthReqs = this.state.leaveRequests.filter(r => String(r.employeeId) === uid && String(r.startDate||'').startsWith(curMonth));
+            const myAllReqs = this.state.leaveRequests.filter(r => String(r.employeeId) === uid);
+            const myMonthReqs = myAllReqs.filter(r => String(r.startDate||'').startsWith(curMonth));
             const approvedCount = myMonthReqs.filter(r => r.status === 'approved' && (r.type==='연차' || r.type==='반차')).length;
             const paidAbsence   = myMonthReqs.filter(r => r.type === '결근(유급)').length;
             const unpaidAbsence = myMonthReqs.filter(r => r.type === '결근(무급)').length;
-            const earlyLeave    = myMonthReqs.filter(r => r.type === '조퇴').length;
+            const earlyLeaveMonth = myMonthReqs.filter(r => r.type === '조퇴').length;
+            const earlyLeaveTotal = myAllReqs.filter(r => r.type === '조퇴').length;
             document.getElementById('my-month-approved').textContent = approvedCount + '건';
             document.getElementById('my-month-absence').innerHTML =
                 `${paidAbsence}<span class="text-base font-medium text-amber-600">건</span> / ${unpaidAbsence}<span class="text-base font-medium text-slate-400">건</span>`;
-            document.getElementById('my-month-early').textContent = earlyLeave + '건';
+            document.getElementById('my-month-early').textContent = `${earlyLeaveTotal}건 / ${earlyLeaveMonth}건`;
         }
 
         const todayStr = this.state.today||this.toLocalISO(new Date());
