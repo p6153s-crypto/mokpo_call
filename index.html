@@ -443,7 +443,7 @@
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚫</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 결근 (유급/무급)</h3><p id="my-month-absence" class="text-3xl font-bold mt-1 text-slate-600">0<span class="text-base font-medium text-amber-600">건</span> / 0<span class="text-base font-medium text-slate-400">건</span></p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">⏰</span><div><h3 class="text-slate-500 font-medium text-sm">조퇴 건수 (전체/이번달)</h3><p id="my-month-early" class="text-3xl font-bold mt-1 text-orange-500">0건 / 0건</p></div></div>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div id="my-status-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between mb-4 gap-3">
                 <h3 id="my-status-heading" class="text-lg font-bold cursor-pointer hover:text-sky-600 transition-colors" title="클릭하면 상세 내역을 볼 수 있어요">📊 내 연차 현황<span id="my-status-name" class="text-sky-600 ml-1"></span> <span class="text-xs font-normal text-slate-400">(클릭 시 상세보기)</span></h3>
                 <div class="relative hidden" id="driver-search-wrapper" data-role="admin">
@@ -2452,6 +2452,8 @@ const App = {
             this.showToast('재입사 처리되었습니다.');
         } else if (func === 'updateLeaveBonus') {
             this.showToast('연차 가감이 저장되었습니다.');
+        } else if (func === 'setEmployeePassword') {
+            this.showToast('로그인 비밀번호가 설정되었습니다.');
         } else if (func === 'updateEmployeeInfo') {
             this.dom.subEmpEditModal.classList.add('hidden');
             this.showToast('정보가 수정되었습니다.');
@@ -2524,6 +2526,16 @@ const App = {
             el.style.display = isSuper ? '' : 'none';
         });
 
+        // 대체근무자 로그인은 연차가 없으므로 "연차 신청" 메뉴를 숨긴다 (연차현황/월별현황은 그대로 이용 가능)
+        const loggedInEmp = this.state.employees.find(e => String(e.id) === String(this.state.loginEmployeeId));
+        const isSubLogin = loggedInEmp?.role === 'substitute';
+        this.state._isSubLogin = isSubLogin;
+        document.querySelectorAll('[data-view="request"]').forEach(el => {
+            el.classList.toggle('hidden', isSubLogin);
+            el.style.display = isSubLogin ? 'none' : '';
+        });
+        if (isSubLogin && this.state.currentView === 'request') this.state.currentView = 'leave-status';
+
         this.updateView();
         this.renderUserSelect();
         this.renderDashboard(leaveStatus);
@@ -2570,11 +2582,12 @@ const App = {
         const curMonth = (this.state.today||this.toLocalISO(new Date())).slice(0,7);
         this.dom.thisMonthSubs.textContent = (this.state.substitutions||[]).filter(s => String(s.workDate).startsWith(curMonth)).length + '건';
 
-        // 전체 현황(관리자) vs 이번달 내 현황(일반 기사) 전환
+        // 전체 현황(관리자) vs 이번달 내 현황(일반 기사) 전환 — 대체근무자는 연차가 없으므로 둘 다 숨김
         const isAdminView = this.state.isAdminAuthenticated;
+        const isSubLogin = this.state._isSubLogin;
         const myStatsGrid = document.getElementById('my-month-stats-grid');
-        if (myStatsGrid) myStatsGrid.style.display = isAdminView ? 'none' : '';
-        if (!isAdminView && this.state.loginEmployeeId) {
+        if (myStatsGrid) myStatsGrid.style.display = (isAdminView || isSubLogin) ? 'none' : '';
+        if (!isAdminView && !isSubLogin && this.state.loginEmployeeId) {
             const uid = String(this.state.loginEmployeeId);
             const myAllReqs = this.state.leaveRequests.filter(r => String(r.employeeId) === uid);
             const myMonthReqs = myAllReqs.filter(r => String(r.startDate||'').startsWith(curMonth));
@@ -2606,6 +2619,8 @@ const App = {
         document.getElementById('pending-approval-count').textContent = pending.length > 0 ? `${pending.length}건` : '';
 
         const myStatus = leaveStatus.find(s => String(s.id) === String(this.state.dashboardSelectedUser));
+        const myStatusCard = document.getElementById('my-status-card');
+        if (myStatusCard) myStatusCard.style.display = isSubLogin ? 'none' : '';
         const myStatusNameEl = document.getElementById('my-status-name');
         if (myStatus) {
             if (myStatusNameEl) myStatusNameEl.textContent = `- ${myStatus.name}`;
@@ -3329,6 +3344,7 @@ const App = {
                 const subCount = subs.filter(s => String(s.substituteId) === String(e.id)).length;
                 const actionBtns = isSuperForSub
                     ? `<button data-id="${e.id}" data-act="editSubEmp" class="bg-slate-500 text-white px-2 py-1 rounded text-xs mr-1 hover:bg-slate-600">수정</button>
+                       <button data-id="${e.id}" data-act="setSubEmpPassword" class="bg-sky-100 text-sky-700 px-2 py-1 rounded text-xs mr-1 hover:bg-sky-200 border border-sky-200">🔑 로그인 비밀번호</button>
                        <button data-id="${e.id}" data-act="retireEmp" class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs mr-1 hover:bg-amber-200 border border-amber-200">전환/비활성화</button>
                        <button data-id="${e.id}" data-act="delEmp" class="bg-gray-400 text-white px-2 py-1 rounded text-xs hover:bg-gray-500">삭제</button>`
                     : '<span class="text-xs text-slate-300">-</span>';
@@ -4693,6 +4709,16 @@ const App = {
                 : `${emp?.name || ''} 기사님을 재입사 처리하시겠습니까?`;
             document.getElementById('retire-date-wrap')?.classList.add('hidden');
             this.dom.retireModal.classList.remove('hidden');
+        } else if (act === 'setSubEmpPassword') {
+            const emp = this.state.employees.find(e => String(e.id) === String(id));
+            if (!emp) return;
+            const newPw = prompt(`${emp.name} 님의 로그인 비밀번호를 설정합니다.\n(생년월일이 없는 대체근무자는 이 비밀번호로 로그인합니다)\n\n새 비밀번호 (4자 이상):`);
+            if (newPw === null) return;
+            if (!newPw || newPw.trim().length < 4) return this.showToast('비밀번호는 4자 이상이어야 합니다.', 'error');
+            const adminPwd = prompt('관리자 비밀번호를 입력하세요:');
+            if (adminPwd === null) return;
+            if (!adminPwd) return this.showToast('관리자 비밀번호를 입력해주세요.', 'error');
+            this.callServer('setEmployeePassword', [id, newPw.trim(), adminPwd]);
         } else if (act === 'bonusPlus' || act === 'bonusMinus') {
             const emp = this.state.employees.find(e => String(e.id) === String(id));
             if (!emp) return;
@@ -4789,6 +4815,10 @@ const App = {
         // 최고관리자 전용
         if (['employees'].includes(view) && !isSuper) {
             this.showToast('최고관리자만 접근 가능합니다.', 'error'); return;
+        }
+        // 대체근무자는 연차가 없어 연차 신청 화면 접근 불가
+        if (view === 'request' && this.state._isSubLogin) {
+            this.showToast('대체근무자는 연차 신청 대상이 아닙니다.', 'error'); return;
         }
         this.state.currentView = view;
         this.updateView();
@@ -4999,8 +5029,9 @@ const App = {
             callServerFunction(f,a){setTimeout(()=>this._f&&this._f(new Error('[로컬 개발] 데이터 변경은 GAS 배포 환경에서만 지원됩니다.')),300);},
             getPastData(y){setTimeout(()=>this._s&&this._s([]),300);},
             getPublicEmployeeList(){setTimeout(()=>this._s&&this._s([
-                {id:'dev-emp-001',name:'홍길동'},{id:'dev-emp-002',name:'김철수'},{id:'dev-emp-003',name:'이영희'},
-                {id:'dev-emp-007',name:'강계약'},{id:'dev-emp-008',name:'오일용'},
+                {id:'dev-emp-001',name:'홍길동',role:'user'},{id:'dev-emp-002',name:'김철수',role:'user'},{id:'dev-emp-003',name:'이영희',role:'user'},
+                {id:'dev-emp-007',name:'강계약',role:'user'},{id:'dev-emp-008',name:'오일용',role:'user'},
+                {id:'dev-emp-004',name:'박대체',role:'substitute'},
             ]),300);},
             loginEmployee(empId, birth){
                 const s=this._s, f=this._f;
