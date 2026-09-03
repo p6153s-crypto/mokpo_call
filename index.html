@@ -283,6 +283,10 @@
                 <input type="password" id="admin-only-password" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none" placeholder="비밀번호 입력" required autocomplete="current-password">
                 <p class="text-xs text-slate-400 mt-1">비밀번호 종류에 따라 관리자/최고관리자 권한이 자동 부여됩니다.</p>
             </div>
+            <label class="flex items-center gap-2 text-sm text-slate-600 select-none cursor-pointer">
+                <input type="checkbox" id="admin-only-auto-checkbox" class="rounded border-slate-300 text-sky-600 focus:ring-sky-400">
+                이 브라우저에서 자동 로그인
+            </label>
             <p id="admin-only-login-error" class="text-red-500 text-xs hidden"></p>
             <button type="submit" id="admin-only-login-submit-btn" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-lg shadow-md transition-colors">관리자 로그인</button>
             <div class="pt-1">
@@ -1621,6 +1625,7 @@ const App = {
     },
 
     LOGIN_STORAGE_KEY: 'hct_login_v7',
+    ADMIN_LOGIN_STORAGE_KEY: 'hct_admin_login_v7',
 
     init() {
         this.cacheDOM();
@@ -1636,6 +1641,12 @@ const App = {
         try { saved = JSON.parse(localStorage.getItem(this.LOGIN_STORAGE_KEY) || 'null'); } catch(e) {}
         if (saved && saved.employeeId && saved.birthDate) {
             this.performLogin(saved.employeeId, saved.birthDate, false, /*silent=*/true);
+            return;
+        }
+        let savedAdmin = null;
+        try { savedAdmin = JSON.parse(localStorage.getItem(this.ADMIN_LOGIN_STORAGE_KEY) || 'null'); } catch(e) {}
+        if (savedAdmin && savedAdmin.password) {
+            this.performAdminOnlyLogin(savedAdmin.password, /*silent=*/true);
         } else {
             this.showLoginScreen();
         }
@@ -1698,6 +1709,7 @@ const App = {
         });
         this.dom.logoutBtn.addEventListener('click', () => {
             try { localStorage.removeItem(this.LOGIN_STORAGE_KEY); } catch(e) {}
+            try { localStorage.removeItem(this.ADMIN_LOGIN_STORAGE_KEY); } catch(e) {}
             location.reload();
         });
 
@@ -1768,6 +1780,7 @@ const App = {
 
     performAdminOnlyLogin(password, silent) {
         const submitBtn = document.getElementById('admin-only-login-submit-btn');
+        const autoLogin = document.getElementById('admin-only-auto-checkbox')?.checked;
         if (!silent && submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '확인 중...'; }
         google.script.run
             .withSuccessHandler(data => {
@@ -1777,6 +1790,11 @@ const App = {
                 this.state.adminOnlyPassword = password;
                 this.state.isAdminAuthenticated = true;
                 this.state.adminRole = data.__adminRole || 'admin';
+                if (autoLogin) {
+                    try { localStorage.setItem(this.ADMIN_LOGIN_STORAGE_KEY, JSON.stringify({ password })); } catch(e) {}
+                } else if (!silent) {
+                    try { localStorage.removeItem(this.ADMIN_LOGIN_STORAGE_KEY); } catch(e) {}
+                }
                 this.dom.loginScreen.classList.add('hidden');
                 this.dom.logoutBtn.classList.remove('hidden');
                 this.dom.logoutBtn.classList.add('flex');
@@ -1784,6 +1802,12 @@ const App = {
                 this.startAutoRefresh();
             })
             .withFailureHandler(err => {
+                if (silent) {
+                    // 저장된 관리자 자동로그인 정보가 더 이상 유효하지 않음 — 조용히 지우고 로그인 화면 표시
+                    try { localStorage.removeItem(this.ADMIN_LOGIN_STORAGE_KEY); } catch(e) {}
+                    this.showLoginScreen();
+                    return;
+                }
                 if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '관리자 로그인'; }
                 this._showError(this.dom.adminOnlyLoginError, err.message || '로그인에 실패했습니다.');
             })
