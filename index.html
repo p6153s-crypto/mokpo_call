@@ -2638,7 +2638,11 @@ const App = {
         document.getElementById('tomorrow-leave-count').textContent =
             (tomorrowCounts.absentCount + tomorrowCounts.subCount) > 0 ? `${tomorrowCounts.absentCount}명, 대체 ${tomorrowCounts.subCount}명` : '';
 
-        const pending = this.state.leaveRequests.filter(r => r.status==='pending');
+        let pending = this.state.leaveRequests.filter(r => r.status==='pending');
+        // 일반 기사/대체근무자 로그인은 본인이 신청한 대기 건만 표시 (개인정보 보호)
+        if (!isAdminView && this.state.loginEmployeeId) {
+            pending = pending.filter(r => String(r.employeeId) === String(this.state.loginEmployeeId));
+        }
         this.dom.dashboardPendingList.innerHTML = pending.length ? pending.map(r => this._getRequestCardHtml(r)).join('') : '<p class="text-slate-400 text-center py-4">대기 없음</p>';
         document.getElementById('pending-approval-count').textContent = pending.length > 0 ? `${pending.length}건` : '';
 
