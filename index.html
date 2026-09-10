@@ -520,8 +520,8 @@
                                 class="leave-type-btn py-2.5 rounded-lg border-2 border-sky-500 bg-sky-500 text-white text-sm font-bold transition-all">
                                 📅 연차
                             </button>
-                            <button type="button" data-type="반차"
-                                class="leave-type-btn py-2.5 rounded-lg border-2 border-slate-200 text-slate-500 text-sm font-medium hover:border-green-400 hover:text-green-600 transition-all">
+                            <button type="button" data-type="반차" disabled title="운전직은 반차를 신청할 수 없습니다."
+                                class="leave-type-btn py-2.5 rounded-lg border-2 border-slate-100 text-slate-300 text-sm font-medium cursor-not-allowed">
                                 🌓 반차
                             </button>
                             <button type="button" data-type="결근"
@@ -843,6 +843,7 @@
                                 <th class="p-4 text-sm font-semibold text-slate-600">사용</th>
                                 <th class="p-4 text-sm font-semibold text-slate-600">잔여</th>
                                 <th class="p-4 text-sm font-semibold text-slate-600">기준</th>
+                                <th class="p-4 text-sm font-semibold text-slate-600">직종</th>
                                 <th class="p-4 text-sm font-semibold text-slate-600 text-center">가감</th>
                                 <th class="p-4 text-sm font-semibold text-slate-600 text-center">작업</th>
                             </tr>
@@ -881,6 +882,17 @@
                             <label class="block text-sm font-medium text-slate-700">조퇴 자동전환 기준 (N회 → 결근(무급) 1건)</label>
                             <input type="number" id="early-leave-threshold" min="1" max="10" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm text-sm p-2" placeholder="3">
                         </div>
+                        <div class="pt-1">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">반차(반일 연차) 신청 허용 직종</label>
+                            <p class="text-xs text-slate-400 mb-2">체크 해제한 직종은 연차 신청 화면에서 "반차" 버튼이 비활성화됩니다.</p>
+                            <div id="half-day-leave-position-checks" class="grid grid-cols-2 gap-y-1.5 gap-x-2">
+                                <label class="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" data-position="운전직" class="half-day-leave-position-check rounded border-slate-300 text-sky-600 focus:ring-sky-400">운전직</label>
+                                <label class="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" data-position="회계직" class="half-day-leave-position-check rounded border-slate-300 text-sky-600 focus:ring-sky-400">회계직</label>
+                                <label class="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" data-position="사무직" class="half-day-leave-position-check rounded border-slate-300 text-sky-600 focus:ring-sky-400">사무직</label>
+                                <label class="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" data-position="관리직" class="half-day-leave-position-check rounded border-slate-300 text-sky-600 focus:ring-sky-400">관리직</label>
+                                <label class="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" data-position="센터장" class="half-day-leave-position-check rounded border-slate-300 text-sky-600 focus:ring-sky-400">센터장</label>
+                            </div>
+                        </div>
                         <button id="save-settings-btn" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-4 rounded-lg text-sm">저장</button>
                     </div>
                 </div>
@@ -912,6 +924,15 @@
                         <input type="hidden" id="new-emp-role" value="user">
                         <div><label class="block text-xs font-semibold text-slate-600 mb-1">이름 <span class="text-red-500">*</span></label><input type="text" id="new-name" maxlength="50" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm" required></div>
                         <div><label class="block text-xs font-semibold text-slate-600 mb-1">차량번호</label><input type="text" id="new-department" maxlength="100" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm"></div>
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">직종</label>
+                            <select id="new-position" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm">
+                                <option value="운전직">운전직</option>
+                                <option value="회계직">회계직</option>
+                                <option value="사무직">사무직</option>
+                                <option value="관리직">관리직</option>
+                                <option value="센터장">센터장</option>
+                            </select>
+                        </div>
                         <div id="new-join-date-wrap"><label class="block text-xs font-semibold text-slate-600 mb-1">입사일 <span class="text-red-500">*</span></label><input type="date" id="new-join-date" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm"></div>
                         <div id="new-birth-date-wrap"><label class="block text-xs font-semibold text-slate-600 mb-1">생년월일 (비밀번호) <span class="text-red-500">*</span></label><input type="date" id="new-birth-date" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm"></div>
                         <div><label class="block text-xs font-semibold text-slate-600 mb-1">최고관리자 비밀번호 <span class="text-red-500">*</span></label><input type="password" id="new-emp-admin-password" class="block w-full rounded-lg border border-slate-300 p-2 text-sm shadow-sm" placeholder="비밀번호 입력" required></div>
@@ -1662,6 +1683,9 @@ const App = {
     // 로그인 화면의 기사 목록(이름만 포함, 민감정보 아님)을 잠깐 로컬에 캐싱해서
     // 재방문 시 서버 응답을 기다리지 않고 드롭다운을 즉시 채운다. 캐시 여부와 무관하게
     // 최신 목록을 다시 조회해 화면과 캐시를 갱신한다.
+    // 직종 구분 — 직원 등록/수정, 반차 사용 여부 설정(직종별)에서 공통으로 사용
+    POSITIONS: ['운전직', '회계직', '사무직', '관리직', '센터장'],
+
     LOGIN_EMPLOYEE_LIST_CACHE_KEY: 'hbcall_login_emp_list_v1',
     LOGIN_EMPLOYEE_LIST_CACHE_TTL_MS: 10 * 60 * 1000,
 
@@ -2076,6 +2100,8 @@ const App = {
             const selectedName = e.target.options[e.target.selectedIndex]?.text || '';
             const nameEl = document.getElementById('my-requests-name');
             if (nameEl) nameEl.textContent = selectedName;
+            // 신청자가 바뀌었으니 직종에 따른 반차 사용 가능 여부도 다시 반영
+            this._updateHalfDayLeaveUI();
             // 연차현황 + 신청목록 갱신
             this._refreshRequestPanel();
         });
@@ -2103,7 +2129,7 @@ const App = {
         // 연차 종류 버튼
         document.getElementById('leave-type-btns').addEventListener('click', e => {
             const btn = e.target.closest('.leave-type-btn');
-            if (!btn) return;
+            if (!btn || btn.disabled) return;
             this.dom.leaveTypeSelect.value = btn.dataset.type;
             this._applyLeaveTypeBtn(btn.dataset.type);
             this.updateDays();
@@ -2141,7 +2167,10 @@ const App = {
         // 직원
         document.getElementById('addEmployeeForm').addEventListener('submit', this.handleAddEmployee.bind(this));
         this.dom.employeeListTable.addEventListener('click', this.handleEmpAction.bind(this));
-        this.dom.employeeListTable.addEventListener('change', e => { if (e.target.classList.contains('employee-method-select')) this.callServer('updateEmployeeMethod', [e.target.dataset.employeeId, e.target.value, this.state.adminPassword]); });
+        this.dom.employeeListTable.addEventListener('change', e => {
+            if (e.target.classList.contains('employee-method-select')) this.callServer('updateEmployeeMethod', [e.target.dataset.employeeId, e.target.value, this.state.adminPassword]);
+            if (e.target.classList.contains('employee-position-select')) this.callServer('updateEmployeePosition', [e.target.dataset.employeeId, e.target.value, this.state.adminPassword]);
+        });
         this.dom.substituteEmpListTable.addEventListener('click', this.handleEmpAction.bind(this));
         this.dom.subEmpEditForm.addEventListener('submit', e => {
             e.preventDefault();
@@ -2208,10 +2237,17 @@ const App = {
                 this.callServer('retireEmployee', [this.state.pendingRetire, date, pwd]);
             }
         });
-        document.getElementById('save-settings-btn').addEventListener('click', () => this.callServer('saveSettings', [{
-            leaveCalculationMethod: document.getElementById('leave-calculation-method').value,
-            earlyLeaveThreshold: document.getElementById('early-leave-threshold').value || '3',
-        }, this.state.adminPassword]));
+        document.getElementById('save-settings-btn').addEventListener('click', () => {
+            const halfDayMap = {};
+            document.querySelectorAll('.half-day-leave-position-check').forEach(cb => {
+                halfDayMap[cb.dataset.position] = cb.checked;
+            });
+            this.callServer('saveSettings', [{
+                leaveCalculationMethod: document.getElementById('leave-calculation-method').value,
+                earlyLeaveThreshold: document.getElementById('early-leave-threshold').value || '3',
+                halfDayLeaveByPosition: JSON.stringify(halfDayMap),
+            }, this.state.adminPassword]);
+        });
 
         // 백업 버튼
         document.getElementById('run-backup-btn').addEventListener('click', () => this.handleRunBackup());
@@ -3125,10 +3161,42 @@ const App = {
         ).join('');
         this.dom.employeeNameSelect.disabled = !isAdmin;
         document.getElementById('leave-name-toggle-btn').classList.toggle('hidden', !isAdmin);
-        // 현재 선택된 종류 버튼 스타일 유지
-        this._applyLeaveTypeBtn(this.dom.leaveTypeSelect.value || '연차');
+        // 반차 사용 여부 — 현재 선택된 신청자의 직종 기준으로 판단
+        this._updateHalfDayLeaveUI();
         // 연차현황 + 신청목록 갱신
         this._refreshRequestPanel();
+    },
+
+    // 직종별 반차 사용 허용 설정(halfDayLeaveByPosition) 파싱
+    _getHalfDayLeaveMap() {
+        try {
+            const map = JSON.parse(this.state.settings?.halfDayLeaveByPosition || '{}');
+            return (map && typeof map === 'object') ? map : {};
+        } catch (e) { return {}; }
+    },
+
+    // employeeId가 없으면 현재 신청서에 선택된 신청자 기준으로 판단
+    _isHalfDayLeaveEnabled(employeeId) {
+        const id = employeeId !== undefined ? employeeId : this.dom.employeeNameSelect?.value;
+        const emp = this.state.employees.find(e => String(e.id) === String(id));
+        const position = emp?.position || '운전직';
+        const map = this._getHalfDayLeaveMap();
+        return map[position] === true;
+    },
+
+    // 신청서의 "반차" 버튼을 현재 선택된 신청자의 직종 설정에 맞춰 켜고/끈다
+    _updateHalfDayLeaveUI() {
+        const halfDayEnabled = this._isHalfDayLeaveEnabled();
+        const halfDayBtn = document.querySelector('#leave-type-btns .leave-type-btn[data-type="반차"]');
+        if (halfDayBtn) {
+            halfDayBtn.disabled = !halfDayEnabled;
+            halfDayBtn.title = halfDayEnabled ? '' : '이 직종은 반차를 신청할 수 없습니다.';
+        }
+        if (!halfDayEnabled && this.dom.leaveTypeSelect.value === '반차') {
+            this.dom.leaveTypeSelect.value = '연차';
+        }
+        // 현재 선택된 종류 버튼 스타일 유지
+        this._applyLeaveTypeBtn(this.dom.leaveTypeSelect.value || '연차');
     },
 
     renderApproval() {
@@ -3347,6 +3415,11 @@ const App = {
                             <option value="fiscalYear" ${e.calculationMethod==='fiscalYear'?'selected':''}>회계</option>
                         </select>
                     </td>
+                    <td data-label="직종" class="p-3">
+                        <select data-employee-id="${e.id}" class="employee-position-select text-xs border rounded p-1" ${isSuper?'':'disabled'}>
+                            ${this.POSITIONS.map(p => `<option value="${p}" ${(e.position||'운전직')===p?'selected':''}>${p}</option>`).join('')}
+                        </select>
+                    </td>
                     <td data-label="가감" class="p-3 text-center">
                         ${isSuper
                             ? `<div class="flex items-center justify-center gap-1">
@@ -3359,7 +3432,7 @@ const App = {
                     <td data-label="작업" class="p-3 text-center space-x-1">${actionBtns}</td>
                 </tr>`;
             }).join('')
-            : '<tr><td colspan="10" class="p-8 text-center text-slate-400">재직 중인 기사가 없습니다.</td></tr>';
+            : '<tr><td colspan="11" class="p-8 text-center text-slate-400">재직 중인 기사가 없습니다.</td></tr>';
 
         // 퇴사자 테이블
         this.dom.retiredListTable.innerHTML = retiredDrivers.length
@@ -3457,6 +3530,10 @@ const App = {
         if (thresholdInput && document.activeElement !== thresholdInput) {
             thresholdInput.value = this.state.settings?.earlyLeaveThreshold || '3';
         }
+        const halfDayMap = this._getHalfDayLeaveMap();
+        document.querySelectorAll('.half-day-leave-position-check').forEach(cb => {
+            if (document.activeElement !== cb) cb.checked = halfDayMap[cb.dataset.position] === true;
+        });
     },
 
     renderCalendar() {
@@ -4540,6 +4617,10 @@ const App = {
     _applyLeaveTypeBtn(type) {
         const colors = { '연차': 'border-sky-500 bg-sky-500 text-white', '반차': 'border-green-500 bg-green-500 text-white', '결근': 'border-red-500 bg-red-500 text-white' };
         document.querySelectorAll('.leave-type-btn').forEach(b => {
+            if (b.disabled) {
+                b.className = 'leave-type-btn py-2.5 rounded-lg border-2 border-slate-100 text-slate-300 text-sm font-medium cursor-not-allowed';
+                return;
+            }
             const isActive = b.dataset.type === type;
             b.className = `leave-type-btn py-2.5 rounded-lg border-2 text-sm font-bold transition-all ${
                 isActive ? colors[type] : 'border-slate-200 text-slate-500 hover:border-slate-300'}`;
@@ -4668,10 +4749,11 @@ const App = {
         const r=this.state.leaveRequests.find(req=>String(req.id)===String(requestId));
         if(!r||r.status!=='pending')return this.showToast('수정 가능한 상태가 아닙니다.','error');
         const form=document.getElementById('leave-edit-form');
+        const halfDayOption = this._isHalfDayLeaveEnabled(r.employeeId) ? `<option value="반차" ${r.type==='반차'?'selected':''}>반차</option>` : '';
         form.innerHTML=`<input type="hidden" name="id" value="${r.id}"><input type="hidden" name="employeeId" value="${r.employeeId}"><input type="hidden" name="isUserEdit" value="true">
             <div class="bg-amber-50 p-3 rounded-lg border border-amber-100 text-sm text-amber-800 mb-4">💡 수정 후 생년월일 확인이 필요합니다.</div>
             <div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-slate-700 mb-1">시작일</label><input type="date" name="startDate" value="${r.startDate}" class="w-full border border-slate-300 rounded-md p-2" required></div><div><label class="block text-sm font-medium text-slate-700 mb-1">종료일</label><input type="date" name="endDate" value="${r.endDate}" class="w-full border border-slate-300 rounded-md p-2" required></div></div>
-            <div><label class="block text-sm font-medium text-slate-700 mb-1">연차 종류</label><select name="type" class="w-full border border-slate-300 rounded-md p-2"><option value="연차" ${r.type==='연차'?'selected':''}>연차</option><option value="반차" ${r.type==='반차'?'selected':''}>반차</option><option value="결근" ${r.type==='결근'?'selected':''}>결근</option></select></div>
+            <div><label class="block text-sm font-medium text-slate-700 mb-1">연차 종류</label><select name="type" class="w-full border border-slate-300 rounded-md p-2"><option value="연차" ${r.type==='연차'?'selected':''}>연차</option>${halfDayOption}<option value="결근" ${r.type==='결근'?'selected':''}>결근</option></select></div>
             <div><label class="block text-sm font-medium text-slate-700 mb-1">사유</label><textarea name="reason" rows="3" class="w-full border border-slate-300 rounded-md p-2" maxlength="200">${this._esc(r.reason||'')}</textarea></div>
             <div class="flex justify-end gap-2 pt-4 border-t mt-4"><button type="button" onclick="document.getElementById('leave-edit-modal').classList.add('hidden')" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700">취소</button><button type="submit" class="px-4 py-2 bg-sky-600 text-white rounded-lg">수정 저장</button></div>`;
         this.dom.leaveEditModal.classList.remove('hidden');
@@ -4838,6 +4920,7 @@ const App = {
         e.preventDefault();
         const name      = document.getElementById('new-name').value.trim();
         const dept      = document.getElementById('new-department').value.trim();
+        const position  = document.getElementById('new-position').value;
         const joinDate  = document.getElementById('new-join-date').value;
         const birthDate = document.getElementById('new-birth-date').value;
         const password  = document.getElementById('new-emp-admin-password').value;
@@ -4845,7 +4928,7 @@ const App = {
         if (!joinDate) return this.showToast('입사일을 입력해주세요.', 'error');
         if (!password) return this.showToast('최고관리자 비밀번호를 입력해주세요.', 'error');
         // 폼 초기화는 handleServerSuccess 성공 후 처리
-        this.callServer('addEmployee', [{ name, department: dept, joinDate, birthDate, role: 'user', calculationMethod: this.state.settings?.leaveCalculationMethod || 'joinDate' }, password]);
+        this.callServer('addEmployee', [{ name, department: dept, position, joinDate, birthDate, role: 'user', calculationMethod: this.state.settings?.leaveCalculationMethod || 'joinDate' }, password]);
     },
 
     toggleAdmin() {
