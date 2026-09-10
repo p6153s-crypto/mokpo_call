@@ -450,7 +450,7 @@
         <!-- 대체근무자 근무 횟수 (대체근무자 로그인 시에만 표시) -->
         <div id="my-sub-stats-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8" style="display:none;">
             <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                <h3 class="text-lg font-bold">🔄 나의 대체근무 횟수</h3>
+                <h3 class="text-lg font-bold">🔄 <span id="my-sub-stats-name"></span> 대체근무 횟수</h3>
                 <select id="my-sub-stats-year" class="text-sm border border-slate-300 rounded-lg p-1.5"></select>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-4">
@@ -2763,6 +2763,9 @@ const App = {
     // 대체근무자 로그인 전용 — 본인의 대체근무 횟수를 월별/연도별로 표시
     _renderMySubStats() {
         const empId = String(this.state.loginEmployeeId);
+        const myEmp = this.state.employees.find(e => String(e.id) === empId);
+        const nameEl = document.getElementById('my-sub-stats-name');
+        if (nameEl) nameEl.textContent = myEmp?.name || '나의';
         const mySubs = (this.state.substitutions || []).filter(s => String(s.substituteId) === empId && s.workDate);
         const todayStr = this.state.today || this.toLocalISO(new Date());
         const curYear  = todayStr.slice(0, 4);
