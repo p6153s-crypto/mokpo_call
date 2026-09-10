@@ -447,6 +447,19 @@
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚫</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 결근 (유급/무급)</h3><p id="my-month-absence" class="text-3xl font-bold mt-1 text-slate-600">0<span class="text-base font-medium text-amber-600">건</span> / 0<span class="text-base font-medium text-slate-400">건</span></p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">⏰</span><div><h3 class="text-slate-500 font-medium text-sm">조퇴 건수 (전체/이번달)</h3><p id="my-month-early" class="text-3xl font-bold mt-1 text-orange-500">0건 / 0건</p></div></div>
         </div>
+        <!-- 대체근무자 근무 횟수 (대체근무자 로그인 시에만 표시) -->
+        <div id="my-sub-stats-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8" style="display:none;">
+            <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                <h3 class="text-lg font-bold">🔄 나의 대체근무 횟수</h3>
+                <select id="my-sub-stats-year" class="text-sm border border-slate-300 rounded-lg p-1.5"></select>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">이번달 근무횟수</p><p id="my-sub-stats-month-total" class="text-2xl font-bold text-indigo-600">0회</p></div>
+                <div class="bg-sky-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">선택 연도 총 근무횟수</p><p id="my-sub-stats-year-total" class="text-2xl font-bold text-sky-600">0회</p></div>
+            </div>
+            <p class="text-xs text-slate-400 mb-2">월별 근무 횟수</p>
+            <div id="my-sub-stats-months" class="grid grid-cols-4 sm:grid-cols-6 gap-2"></div>
+        </div>
         <div id="my-status-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between mb-4 gap-3">
                 <h3 id="my-status-heading" class="text-lg font-bold cursor-pointer hover:text-sky-600 transition-colors" title="클릭하면 상세 내역을 볼 수 있어요">📊 내 연차 현황<span id="my-status-name" class="text-sky-600 ml-1"></span> <span class="text-xs font-normal text-slate-400">(클릭 시 상세보기)</span></h3>
@@ -2249,6 +2262,9 @@ const App = {
             }, this.state.adminPassword]);
         });
 
+        // 대체근무자 로그인 — 내 근무횟수 연도 선택
+        document.getElementById('my-sub-stats-year')?.addEventListener('change', () => this._renderMySubStats());
+
         // 백업 버튼
         document.getElementById('run-backup-btn').addEventListener('click', () => this.handleRunBackup());
 
@@ -2710,6 +2726,11 @@ const App = {
         const myStatus = leaveStatus.find(s => String(s.id) === String(this.state.dashboardSelectedUser));
         const myStatusCard = document.getElementById('my-status-card');
         if (myStatusCard) myStatusCard.style.display = isSubLogin ? 'none' : '';
+        const mySubStatsCard = document.getElementById('my-sub-stats-card');
+        if (mySubStatsCard) {
+            mySubStatsCard.style.display = isSubLogin ? '' : 'none';
+            if (isSubLogin) this._renderMySubStats();
+        }
         const myStatusNameEl = document.getElementById('my-status-name');
         if (myStatus) {
             if (myStatusNameEl) myStatusNameEl.textContent = `- ${myStatus.name}`;
@@ -2737,6 +2758,47 @@ const App = {
             </div>
             <p class="text-slate-400 text-sm text-center mt-3">우측 "기사 검색"으로 기사님을 선택하면 현황이 표시됩니다.</p>`;
         }
+    },
+
+    // 대체근무자 로그인 전용 — 본인의 대체근무 횟수를 월별/연도별로 표시
+    _renderMySubStats() {
+        const empId = String(this.state.loginEmployeeId);
+        const mySubs = (this.state.substitutions || []).filter(s => String(s.substituteId) === empId && s.workDate);
+        const todayStr = this.state.today || this.toLocalISO(new Date());
+        const curYear  = todayStr.slice(0, 4);
+        const curMonthNum = parseInt(todayStr.slice(5, 7), 10);
+
+        const years = [...new Set(mySubs.map(s => String(s.workDate).slice(0, 4)))].sort().reverse();
+        if (!years.includes(curYear)) years.unshift(curYear);
+
+        const yearSelect = document.getElementById('my-sub-stats-year');
+        if (yearSelect && yearSelect.dataset.filledFor !== years.join(',')) {
+            const keepValue = yearSelect.value;
+            yearSelect.innerHTML = years.map(y => `<option value="${y}">${y}년</option>`).join('');
+            yearSelect.value = years.includes(keepValue) ? keepValue : curYear;
+            yearSelect.dataset.filledFor = years.join(',');
+        }
+        const selectedYear = yearSelect?.value || curYear;
+
+        const yearSubs = mySubs.filter(s => String(s.workDate).startsWith(selectedYear));
+        document.getElementById('my-sub-stats-year-total').textContent = yearSubs.length + '회';
+
+        const monthCounts = Array(12).fill(0);
+        yearSubs.forEach(s => {
+            const m = parseInt(String(s.workDate).slice(5, 7), 10);
+            if (m >= 1 && m <= 12) monthCounts[m - 1]++;
+        });
+        document.getElementById('my-sub-stats-months').innerHTML = monthCounts.map((cnt, i) => {
+            const monthNum = i + 1;
+            const isCurMonth = selectedYear === curYear && monthNum === curMonthNum;
+            return `<div class="flex flex-col items-center p-2 rounded-lg ${isCurMonth ? 'bg-indigo-50 border border-indigo-200' : 'bg-slate-50'}">
+                <span class="text-xs text-slate-400">${monthNum}월</span>
+                <span class="text-lg font-bold ${cnt > 0 ? 'text-indigo-600' : 'text-slate-300'}">${cnt}</span>
+            </div>`;
+        }).join('');
+
+        const monthTotal = selectedYear === curYear ? monthCounts[curMonthNum - 1] : 0;
+        document.getElementById('my-sub-stats-month-total').textContent = monthTotal + '회';
     },
 
     //
