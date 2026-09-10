@@ -643,7 +643,7 @@
         <!-- 대체근무 통계 요약 -->
         <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 class="text-lg font-bold mb-4">🏆 대체근무 횟수 순위</h3>
+                <h3 class="text-lg font-bold mb-4">🏆 대체근무 횟수 순위 <span class="text-sm font-normal text-slate-400">(이번달 / 전체)</span></h3>
                 <div id="sub-rank-list" class="space-y-2"></div>
             </div>
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -3612,17 +3612,27 @@ const App = {
             }).join('')
             : '<tr><td colspan="6" class="p-10 text-center text-slate-400">대체근무 내역이 없습니다.</td></tr>';
 
-        // 대체근무 횟수 순위 (전환/비활성화 및 삭제된 대상 제외)
-        const countMap = {};
-        subs.forEach(s => { const k = String(s.substituteId); countMap[k] = (countMap[k]||0)+1; });
-        const ranked = Object.entries(countMap)
-            .map(([id, cnt]) => [id, cnt, this.state.employees.find(emp=>String(emp.id)===id)])
-            .filter(([,,e]) => e && !e.resignDate)
+        // 대체근무 횟수 순위 (전환/비활성화 및 삭제된 대상 제외) — 이번 달 횟수 + 전체 횟수 함께 표시
+        const curMonthPrefix = String(this.state.today || '').slice(0, 7); // 'yyyy-MM'
+        const curMonthNum = curMonthPrefix ? parseInt(curMonthPrefix.slice(5, 7), 10) : null;
+        const totalCountMap = {};
+        const monthCountMap = {};
+        subs.forEach(s => {
+            const k = String(s.substituteId);
+            totalCountMap[k] = (totalCountMap[k] || 0) + 1;
+            if (curMonthPrefix && String(s.workDate).startsWith(curMonthPrefix)) {
+                monthCountMap[k] = (monthCountMap[k] || 0) + 1;
+            }
+        });
+        const ranked = Object.entries(totalCountMap)
+            .map(([id, cnt]) => [id, cnt, monthCountMap[id] || 0, this.state.employees.find(emp=>String(emp.id)===id)])
+            .filter(([,,,e]) => e && !e.resignDate)
             .sort((a,b)=>b[1]-a[1]).slice(0,5);
         this.dom.subRankList.innerHTML = ranked.length
-            ? ranked.map(([id, cnt, e], i) => {
+            ? ranked.map(([id, cnt, monthCnt, e], i) => {
                 const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
-                return `<div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg"><div class="flex items-center gap-2"><span class="text-lg">${medals[i]||'  '}</span><span class="font-medium text-sm">${this._esc(e?.name||'?')}</span></div><span class="bg-indigo-100 text-indigo-700 font-bold text-sm px-3 py-0.5 rounded-full">${cnt}회</span></div>`;
+                const monthLabel = curMonthNum ? `${curMonthNum}월 ` : '';
+                return `<div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg"><div class="flex items-center gap-2"><span class="text-lg">${medals[i]||'  '}</span><span class="font-medium text-sm">${this._esc(e?.name||'?')}</span></div><span class="bg-indigo-100 text-indigo-700 font-bold text-sm px-3 py-0.5 rounded-full">${monthLabel}${monthCnt}회 <span class="font-normal text-indigo-500">(전체 ${cnt}회)</span></span></div>`;
             }).join('')
             : '<p class="text-slate-400 text-sm text-center py-4">데이터 없음</p>';
 
