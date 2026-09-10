@@ -1659,21 +1659,42 @@ const App = {
         this.loadLoginEmployeeOptions();
     },
 
+    // 로그인 화면의 기사 목록(이름만 포함, 민감정보 아님)을 잠깐 로컬에 캐싱해서
+    // 재방문 시 서버 응답을 기다리지 않고 드롭다운을 즉시 채운다. 캐시 여부와 무관하게
+    // 최신 목록을 다시 조회해 화면과 캐시를 갱신한다.
+    LOGIN_EMPLOYEE_LIST_CACHE_KEY: 'hbcall_login_emp_list_v1',
+    LOGIN_EMPLOYEE_LIST_CACHE_TTL_MS: 10 * 60 * 1000,
+
     loadLoginEmployeeOptions() {
+        try {
+            const cached = JSON.parse(localStorage.getItem(this.LOGIN_EMPLOYEE_LIST_CACHE_KEY) || 'null');
+            if (cached && Array.isArray(cached.list) && (Date.now() - cached.at) < this.LOGIN_EMPLOYEE_LIST_CACHE_TTL_MS) {
+                this._loginEmployeeList = cached.list;
+                this._renderLoginEmployeeOptions(cached.list);
+            }
+        } catch (e) {}
         google.script.run
             .withSuccessHandler(list => {
                 this._loginEmployeeList = list || [];
-                const optionsHtml = (list && list.length)
-                    ? '<option value="">선택하세요</option>' + list.map(e => `<option value="${e.id}">${this._esc(e.name)}</option>`).join('')
-                    : '<option value="">등록된 기사가 없습니다</option>';
-                this.dom.loginEmployeeSelect.innerHTML = optionsHtml;
-                this.dom.cpEmployeeSelect.innerHTML = optionsHtml;
+                this._renderLoginEmployeeOptions(list);
+                try { localStorage.setItem(this.LOGIN_EMPLOYEE_LIST_CACHE_KEY, JSON.stringify({ list, at: Date.now() })); } catch (e) {}
             })
             .withFailureHandler(() => {
-                this.dom.loginEmployeeSelect.innerHTML = '<option value="">목록을 불러오지 못했습니다</option>';
-                this.dom.cpEmployeeSelect.innerHTML = '<option value="">목록을 불러오지 못했습니다</option>';
+                // 캐시로 이미 목록을 채웠다면 그대로 두고, 캐시도 없을 때만 오류 표시
+                if (!this._loginEmployeeList || !this._loginEmployeeList.length) {
+                    this.dom.loginEmployeeSelect.innerHTML = '<option value="">목록을 불러오지 못했습니다</option>';
+                    this.dom.cpEmployeeSelect.innerHTML = '<option value="">목록을 불러오지 못했습니다</option>';
+                }
             })
             .getPublicEmployeeList();
+    },
+
+    _renderLoginEmployeeOptions(list) {
+        const optionsHtml = (list && list.length)
+            ? '<option value="">선택하세요</option>' + list.map(e => `<option value="${e.id}">${this._esc(e.name)}</option>`).join('')
+            : '<option value="">등록된 기사가 없습니다</option>';
+        this.dom.loginEmployeeSelect.innerHTML = optionsHtml;
+        this.dom.cpEmployeeSelect.innerHTML = optionsHtml;
     },
 
     bindLoginEvents() {
@@ -1788,6 +1809,7 @@ const App = {
                 this.state.loginEmployeeId = null;
                 this.state.loginBirthDate = null;
                 this.state.adminOnlyPassword = password;
+                this.state.adminPassword = password;
                 this.state.isAdminAuthenticated = true;
                 this.state.adminRole = data.__adminRole || 'admin';
                 if (autoLogin) {
@@ -2119,7 +2141,7 @@ const App = {
         // 직원
         document.getElementById('addEmployeeForm').addEventListener('submit', this.handleAddEmployee.bind(this));
         this.dom.employeeListTable.addEventListener('click', this.handleEmpAction.bind(this));
-        this.dom.employeeListTable.addEventListener('change', e => { if (e.target.classList.contains('employee-method-select')) this.callServer('updateEmployeeMethod', [e.target.dataset.employeeId, e.target.value]); });
+        this.dom.employeeListTable.addEventListener('change', e => { if (e.target.classList.contains('employee-method-select')) this.callServer('updateEmployeeMethod', [e.target.dataset.employeeId, e.target.value, this.state.adminPassword]); });
         this.dom.substituteEmpListTable.addEventListener('click', this.handleEmpAction.bind(this));
         this.dom.subEmpEditForm.addEventListener('submit', e => {
             e.preventDefault();
@@ -2189,7 +2211,7 @@ const App = {
         document.getElementById('save-settings-btn').addEventListener('click', () => this.callServer('saveSettings', [{
             leaveCalculationMethod: document.getElementById('leave-calculation-method').value,
             earlyLeaveThreshold: document.getElementById('early-leave-threshold').value || '3',
-        }]));
+        }, this.state.adminPassword]));
 
         // 백업 버튼
         document.getElementById('run-backup-btn').addEventListener('click', () => this.handleRunBackup());
@@ -2434,6 +2456,9 @@ const App = {
             if (data?.isValid) {
                 this.state.isAdminAuthenticated = true;
                 this.state.adminRole = data.role || 'admin'; // 'admin' | 'super'
+                // 관리자 확인된 세션 동안, 이후의 관리자 전용 서버 호출(승인/설정 저장 등)에 재사용
+                this.state.adminPassword = this._pendingAdminPassword || '';
+                this._pendingAdminPassword = '';
                 this.dom.adminLoginModal.classList.add('hidden');
                 this.dom.passwordError.classList.add('hidden');
                 const roleLabel = data.role === 'super' ? '최고관리자' : '관리자';
@@ -3886,7 +3911,7 @@ const App = {
         } else if (act === 'absence-to-leave') {
             const r = this.state.leaveRequests.find(req=>String(req.id)===String(id));
             if (!r) return;
-            this.callServer('updateLeaveRequest', [{ id: r.id, employeeId: r.employeeId, type: '연차', startDate: r.startDate, endDate: r.endDate, reason: r.reason || '' }]);
+            this.callServer('updateLeaveRequest', [{ id: r.id, employeeId: r.employeeId, type: '연차', startDate: r.startDate, endDate: r.endDate, reason: r.reason || '' }, this.state.adminPassword]);
         }
     },
 
@@ -4295,7 +4320,7 @@ const App = {
             workDate,
             note:           this.dom.subNote.value,
         };
-        this.callServer(editId ? 'updateSubstitution' : 'addSubstitution', [payload]);
+        this.callServer(editId ? 'updateSubstitution' : 'addSubstitution', [payload, this.state.adminPassword]);
     },
 
     handleSubAction(e) {
@@ -4651,7 +4676,7 @@ const App = {
             document.getElementById('leave-auth-title').textContent='수정 확인';
             document.getElementById('leave-auth-desc').textContent='수정을 완료하려면 생년월일을 입력해주세요.';
         } else {
-            this.callServer('updateLeaveRequest',[obj]);
+            this.callServer('updateLeaveRequest',[obj, this.state.adminPassword]);
         }
     },
 
@@ -4673,10 +4698,10 @@ const App = {
             this.state.pendingDelete={type:'leaveRequest',id};
             this.dom.reauthPassword.value=''; this.dom.reauthError.classList.add('hidden'); this.dom.reauthModal.classList.remove('hidden');
         } else if(act==='reject'){
-            this.callServer('updateLeaveStatus',[id,'rejected']);
+            this.callServer('updateLeaveStatus',[id,'rejected',null,this.state.adminPassword]);
         } else if(act==='approve'){
             const row=btn.closest('tr'); const check=row?.querySelector('.absence-check');
-            this.callServer('updateLeaveStatus',[id,'approved',check&&!check.checked?0:null]);
+            this.callServer('updateLeaveStatus',[id,'approved',check&&!check.checked?0:null,this.state.adminPassword]);
         } else if(act==='edit'){
             const r=this.state.leaveRequests.find(req=>String(req.id)===String(id));
             if(r){
@@ -4817,6 +4842,7 @@ const App = {
         if(this.state.isAdminAuthenticated){
             this.state.isAdminAuthenticated=false;
             this.state.adminRole=null;
+            this.state.adminPassword='';
             this.state.currentView='leave-status';
             this.render();
         } else {
@@ -4829,7 +4855,8 @@ const App = {
     handleAdminLogin(e) {
         e.preventDefault();
         this.dom.passwordError.classList.add('hidden');
-        this.callServer('checkAdminPassword',[this.dom.adminPasswordInput.value]);
+        this._pendingAdminPassword = this.dom.adminPasswordInput.value;
+        this.callServer('checkAdminPassword',[this._pendingAdminPassword]);
     },
 
     navigateTo(view) {
@@ -4895,7 +4922,10 @@ const App = {
         if(!this.currentDetailData?.list)return;
         const {empName,target,list}=this.currentDetailData,total=list.reduce((s,r)=>s+Number(r.days),0);
         const win=window.open('','_blank','width=800,height=600');
-        win.document.write(`<html><head><title>${empName} 연차내역</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px}th{background:#f2f2f2}.r{text-align:right}</style></head><body><h2 style="text-align:center">${empName} 연차 사용 내역</h2><p style="text-align:center">기간: ${target}</p><table><thead><tr><th>종류</th><th>기간</th><th>일수</th><th>사유</th></tr></thead><tbody>${list.map(r=>`<tr><td>${r.type}</td><td>${r.startDate}~${r.endDate}</td><td>${r.days}</td><td>${r.reason||''}</td></tr>`).join('')}</tbody></table><p class="r"><strong>총 사용: ${total}일</strong></p><script>window.print();window.close();<\/script></body></html>`);
+        // 사유/유형 등은 사용자가 직접 입력한 값이므로, 인쇄 팝업에 삽입하기 전 반드시 이스케이프한다 (XSS 방지)
+        const safeEmpName = this._esc(empName);
+        const safeTarget  = this._esc(target);
+        win.document.write(`<html><head><title>${safeEmpName} 연차내역</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px}th{background:#f2f2f2}.r{text-align:right}</style></head><body><h2 style="text-align:center">${safeEmpName} 연차 사용 내역</h2><p style="text-align:center">기간: ${safeTarget}</p><table><thead><tr><th>종류</th><th>기간</th><th>일수</th><th>사유</th></tr></thead><tbody>${list.map(r=>`<tr><td>${this._esc(r.type)}</td><td>${this._esc(r.startDate)}~${this._esc(r.endDate)}</td><td>${r.days}</td><td>${this._esc(r.reason||'')}</td></tr>`).join('')}</tbody></table><p class="r"><strong>총 사용: ${total}일</strong></p><script>window.print();window.close();<\/script></body></html>`);
         win.document.close();
     },
 
@@ -4924,7 +4954,7 @@ const App = {
                 document.getElementById('backup-status-list').innerHTML =
                     '<p class="text-xs text-red-400 text-center py-2">백업 이력 로드 실패</p>';
             })
-            .callServerFunction('getBackupStatus', []);
+            .callServerFunction('getBackupStatus', [this.state.adminPassword]);
     },
 
     renderBackupStatus(list) {
@@ -4995,7 +5025,7 @@ const App = {
                 btn.innerHTML = '<span>💾</span><span>지금 백업 실행</span>';
                 this.showToast('백업 실패: ' + e.message, 'error');
             })
-            .callServerFunction('runManualBackup', []);
+            .callServerFunction('runManualBackup', [this.state.adminPassword]);
     },
 
     _esc(str) {
