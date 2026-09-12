@@ -460,6 +460,29 @@
             <p class="text-xs text-slate-400 mb-2">월별 근무 횟수</p>
             <div id="my-sub-stats-months" class="grid grid-cols-4 sm:grid-cols-6 gap-2"></div>
         </div>
+        <!-- 관리자 로그인 시 표시되는 실시간 대체근무 / 결근·조퇴 현황 (내 연차 현황 대신) -->
+        <div id="admin-status-cards" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" style="display:none;">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h3 class="text-lg font-bold mb-4">🔄 대체근무 현황 <span class="text-xs font-normal text-slate-400">(실시간)</span></h3>
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">오늘</p><p id="admin-sub-today" class="text-xl font-bold text-indigo-600">0건</p></div>
+                    <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">이번주</p><p id="admin-sub-week" class="text-xl font-bold text-indigo-600">0건</p></div>
+                    <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">이번달</p><p id="admin-sub-month" class="text-xl font-bold text-indigo-600">0건</p></div>
+                </div>
+                <p class="text-xs text-slate-400 mb-2">최근 대체근무</p>
+                <div id="admin-sub-recent-list" class="space-y-2"></div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h3 class="text-lg font-bold mb-4">🚫 결근/조퇴 현황 <span class="text-xs font-normal text-slate-400">(이번달·실시간)</span></h3>
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="bg-amber-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">결근(유급)</p><p id="admin-absence-paid" class="text-xl font-bold text-amber-600">0건</p></div>
+                    <div class="bg-slate-100 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">결근(무급)</p><p id="admin-absence-unpaid" class="text-xl font-bold text-slate-600">0건</p></div>
+                    <div class="bg-orange-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">조퇴</p><p id="admin-early-leave" class="text-xl font-bold text-orange-500">0건</p></div>
+                </div>
+                <p class="text-xs text-slate-400 mb-2">조퇴 누적 현황 (자동전환 기준 대비)</p>
+                <div id="admin-early-leave-progress-list" class="space-y-2"></div>
+            </div>
+        </div>
         <div id="my-status-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between mb-4 gap-3">
                 <h3 id="my-status-heading" class="text-lg font-bold cursor-pointer hover:text-sky-600 transition-colors" title="클릭하면 상세 내역을 볼 수 있어요">📊 내 연차 현황<span id="my-status-name" class="text-sky-600 ml-1"></span> <span class="text-xs font-normal text-slate-400">(클릭 시 상세보기)</span></h3>
@@ -2725,11 +2748,17 @@ const App = {
 
         const myStatus = leaveStatus.find(s => String(s.id) === String(this.state.dashboardSelectedUser));
         const myStatusCard = document.getElementById('my-status-card');
-        if (myStatusCard) myStatusCard.style.display = isSubLogin ? 'none' : '';
+        if (myStatusCard) myStatusCard.style.display = (isSubLogin || isAdminView) ? 'none' : '';
         const mySubStatsCard = document.getElementById('my-sub-stats-card');
         if (mySubStatsCard) {
-            mySubStatsCard.style.display = isSubLogin ? '' : 'none';
-            if (isSubLogin) this._renderMySubStats();
+            const showSubStats = isSubLogin && !isAdminView;
+            mySubStatsCard.style.display = showSubStats ? '' : 'none';
+            if (showSubStats) this._renderMySubStats();
+        }
+        const adminStatusCards = document.getElementById('admin-status-cards');
+        if (adminStatusCards) {
+            adminStatusCards.style.display = isAdminView ? '' : 'none';
+            if (isAdminView) this._renderAdminStatusCards();
         }
         const myStatusNameEl = document.getElementById('my-status-name');
         if (myStatus) {
@@ -2802,6 +2831,62 @@ const App = {
 
         const monthTotal = selectedYear === curYear ? monthCounts[curMonthNum - 1] : 0;
         document.getElementById('my-sub-stats-month-total').textContent = monthTotal + '회';
+    },
+
+    // 관리자 로그인 전용 — 대체근무 현황 / 결근·조퇴 현황을 실시간(현재 상태 기준)으로 표시
+    _renderAdminStatusCards() {
+        const todayStr = this.state.today || this.toLocalISO(new Date());
+        const curMonth = todayStr.slice(0, 7);
+        const empName = id => this.state.employees.find(e => String(e.id) === String(id))?.name || '?';
+
+        // 이번주(월~일) 범위 계산
+        const todayDate = new Date(todayStr);
+        const dow = todayDate.getDay(); // 0=일,1=월,...
+        const mondayOffset = dow === 0 ? -6 : 1 - dow;
+        const weekStart = new Date(todayDate); weekStart.setDate(todayDate.getDate() + mondayOffset);
+        const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+        const weekStartStr = this.toLocalISO(weekStart), weekEndStr = this.toLocalISO(weekEnd);
+
+        // ── 대체근무 현황 ──
+        const subs = this.state.substitutions || [];
+        const todaySubs = subs.filter(s => s.workDate === todayStr);
+        const weekSubs  = subs.filter(s => s.workDate >= weekStartStr && s.workDate <= weekEndStr);
+        const monthSubs = subs.filter(s => String(s.workDate).startsWith(curMonth));
+        document.getElementById('admin-sub-today').textContent = todaySubs.length + '건';
+        document.getElementById('admin-sub-week').textContent  = weekSubs.length + '건';
+        document.getElementById('admin-sub-month').textContent = monthSubs.length + '건';
+
+        const recentSubs = [...subs].sort((a,b) => String(b.workDate).localeCompare(String(a.workDate))).slice(0, 5);
+        document.getElementById('admin-sub-recent-list').innerHTML = recentSubs.length
+            ? recentSubs.map(s => `<div class="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 text-sm">
+                <span class="text-slate-500">${this._esc(s.workDate)}</span>
+                <span class="font-medium">${this._esc(empName(s.absenteeId))} → ${this._esc(empName(s.substituteId))}</span>
+            </div>`).join('')
+            : '<p class="text-slate-400 text-sm text-center py-4">등록된 대체근무가 없습니다.</p>';
+
+        // ── 결근/조퇴 현황 (이번달) ──
+        const monthAbsences = this.state.leaveRequests.filter(r =>
+            (r.type === '결근(유급)' || r.type === '결근(무급)' || r.type === '조퇴') && String(r.startDate).startsWith(curMonth));
+        document.getElementById('admin-absence-paid').textContent   = monthAbsences.filter(r => r.type === '결근(유급)').length + '건';
+        document.getElementById('admin-absence-unpaid').textContent = monthAbsences.filter(r => r.type === '결근(무급)').length + '건';
+        document.getElementById('admin-early-leave').textContent    = monthAbsences.filter(r => r.type === '조퇴').length + '건';
+
+        // 조퇴 자동전환 기준 대비 누적 현황 (전환되지 않은 조퇴 건 기준)
+        const threshold = parseInt(this.state.settings?.earlyLeaveThreshold, 10) || 3;
+        const pendingByEmp = {};
+        this.state.leaveRequests.forEach(r => {
+            if (r.type === '조퇴' && !r.converted) {
+                const k = String(r.employeeId);
+                pendingByEmp[k] = (pendingByEmp[k] || 0) + 1;
+            }
+        });
+        const progressList = Object.entries(pendingByEmp).sort((a,b) => b[1] - a[1]).slice(0, 6);
+        document.getElementById('admin-early-leave-progress-list').innerHTML = progressList.length
+            ? progressList.map(([id, cnt]) => `<div class="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 text-sm">
+                <span class="font-medium">${this._esc(empName(id))}</span>
+                <span class="text-xs ${cnt >= threshold ? 'bg-red-100 text-red-600' : 'bg-indigo-50 text-indigo-600'} px-2 py-0.5 rounded-full font-bold">${cnt}/${threshold}</span>
+            </div>`).join('')
+            : '<p class="text-slate-400 text-sm text-center py-4">조퇴 누적자가 없습니다.</p>';
     },
 
     //
