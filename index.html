@@ -439,8 +439,8 @@
         </div>
         <!-- 전체 현황 (관리자 전용) -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 hidden" data-role="admin">
-            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚕</span><div><h3 class="text-slate-500 font-medium text-sm">전체 기사</h3><p id="total-employees" class="text-3xl font-bold mt-1">0</p></div></div>
-            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">📥</span><div><h3 class="text-slate-500 font-medium text-sm">대기 건수</h3><p id="pending-requests" class="text-3xl font-bold mt-1 text-amber-500">0건</p></div></div>
+            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚕</span><div><h3 class="text-slate-500 font-medium text-sm">전체기사: 상용직/일용직</h3><p id="total-employees" class="text-3xl font-bold mt-1">0 / 0</p></div></div>
+            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">📥</span><div><h3 class="text-slate-500 font-medium text-sm">휴가승인 대기건수</h3><p id="pending-requests" class="text-3xl font-bold mt-1 text-amber-500">0건</p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🔄</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 대체근무</h3><p id="this-month-subs" class="text-3xl font-bold mt-1 text-indigo-500">0건</p></div></div>
         </div>
         <!-- 이번달 내 현황 (일반 기사 로그인 시) -->
@@ -470,7 +470,7 @@
                 <h3 class="text-lg font-bold mb-4">🔄 대체근무 현황 <span class="text-xs font-normal text-slate-400">(실시간)</span></h3>
                 <div class="grid grid-cols-3 gap-3 mb-4">
                     <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">오늘</p><p id="admin-sub-today" class="text-xl font-bold text-indigo-600">0건</p></div>
-                    <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">이번주</p><p id="admin-sub-week" class="text-xl font-bold text-indigo-600">0건</p></div>
+                    <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">내일</p><p id="admin-sub-tomorrow" class="text-xl font-bold text-indigo-600">0건</p></div>
                     <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">이번달</p><p id="admin-sub-month" class="text-xl font-bold text-indigo-600">0건</p></div>
                 </div>
                 <p class="text-xs text-slate-400 mb-2">현재 근무중인 대체근무자 (이번달 / 올해 횟수)</p>
@@ -2732,7 +2732,10 @@ const App = {
     },
 
     renderDashboard(leaveStatus) {
-        this.dom.totalEmployees.textContent = this.state.employees.filter(e => e.role !== 'substitute' && !e.resignDate).length;
+        const activeDriversForCount = this.state.employees.filter(e => e.role !== 'substitute' && !e.resignDate);
+        const regularCount = activeDriversForCount.filter(e => this.getEmploymentType(e).code !== 'daily').length;
+        const dailyCount   = activeDriversForCount.filter(e => this.getEmploymentType(e).code === 'daily').length;
+        this.dom.totalEmployees.textContent = `${regularCount} / ${dailyCount}`;
         this.dom.pendingRequests.textContent = this.state.leaveRequests.filter(r => r.status==='pending').length + '건';
 
         const curMonth = (this.state.today||this.toLocalISO(new Date())).slice(0,7);
@@ -2933,22 +2936,19 @@ const App = {
         const curMonth = todayStr.slice(0, 7);
         const empName = id => this.state.employees.find(e => String(e.id) === String(id))?.name || '?';
 
-        // 이번주(월~일) 범위 계산
+        // 내일 날짜 계산
         const todayDate = new Date(todayStr);
-        const dow = todayDate.getDay(); // 0=일,1=월,...
-        const mondayOffset = dow === 0 ? -6 : 1 - dow;
-        const weekStart = new Date(todayDate); weekStart.setDate(todayDate.getDate() + mondayOffset);
-        const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
-        const weekStartStr = this.toLocalISO(weekStart), weekEndStr = this.toLocalISO(weekEnd);
+        const tomorrowDate = new Date(todayDate); tomorrowDate.setDate(todayDate.getDate() + 1);
+        const tomorrowStr = this.toLocalISO(tomorrowDate);
 
         // ── 대체근무 현황 ──
         const subs = this.state.substitutions || [];
-        const todaySubs = subs.filter(s => s.workDate === todayStr);
-        const weekSubs  = subs.filter(s => s.workDate >= weekStartStr && s.workDate <= weekEndStr);
-        const monthSubs = subs.filter(s => String(s.workDate).startsWith(curMonth));
-        document.getElementById('admin-sub-today').textContent = todaySubs.length + '건';
-        document.getElementById('admin-sub-week').textContent  = weekSubs.length + '건';
-        document.getElementById('admin-sub-month').textContent = monthSubs.length + '건';
+        const todaySubs    = subs.filter(s => s.workDate === todayStr);
+        const tomorrowSubs = subs.filter(s => s.workDate === tomorrowStr);
+        const monthSubs    = subs.filter(s => String(s.workDate).startsWith(curMonth));
+        document.getElementById('admin-sub-today').textContent    = todaySubs.length + '건';
+        document.getElementById('admin-sub-tomorrow').textContent = tomorrowSubs.length + '건';
+        document.getElementById('admin-sub-month').textContent    = monthSubs.length + '건';
 
         // 대체근무자별 근무 횟수 (재직 중인 대체근무자 기준, 이번달/올해)
         const curYear = todayStr.slice(0, 4);
