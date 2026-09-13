@@ -2732,9 +2732,8 @@ const App = {
     },
 
     renderDashboard(leaveStatus) {
-        const activeDriversForCount = this.state.employees.filter(e => e.role !== 'substitute' && !e.resignDate);
-        const regularCount = activeDriversForCount.filter(e => this.getEmploymentType(e).code !== 'daily').length;
-        const dailyCount   = activeDriversForCount.filter(e => this.getEmploymentType(e).code === 'daily').length;
+        const regularCount = this.state.employees.filter(e => e.role !== 'substitute' && !e.resignDate).length;
+        const dailyCount   = this.state.employees.filter(e => e.role === 'substitute' && !e.resignDate).length;
         this.dom.totalEmployees.textContent = `${regularCount} / ${dailyCount}`;
         this.dom.pendingRequests.textContent = this.state.leaveRequests.filter(r => r.status==='pending').length + '건';
 
