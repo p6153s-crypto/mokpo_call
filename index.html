@@ -461,6 +461,8 @@
             </div>
             <p class="text-xs text-slate-400 mb-2">월별 근무 횟수</p>
             <div id="my-sub-stats-months" class="grid grid-cols-4 sm:grid-cols-6 gap-2"></div>
+            <p class="text-xs text-slate-400 mt-5 mb-2">이번달 근무 일자별 시간 <span class="text-slate-300">(메모에 기재된 근무시간 기준)</span></p>
+            <div id="my-sub-stats-days-list" class="flex flex-wrap gap-1.5"></div>
         </div>
         <!-- 관리자 로그인 시 표시되는 실시간 대체근무 / 결근·조퇴 현황 (내 연차 현황 대신) -->
         <div id="admin-status-cards" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" style="display:none;">
@@ -471,8 +473,8 @@
                     <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">이번주</p><p id="admin-sub-week" class="text-xl font-bold text-indigo-600">0건</p></div>
                     <div class="bg-indigo-50 rounded-lg p-3 text-center"><p class="text-xs text-slate-500 mb-1">이번달</p><p id="admin-sub-month" class="text-xl font-bold text-indigo-600">0건</p></div>
                 </div>
-                <p class="text-xs text-slate-400 mb-2">최근 대체근무</p>
-                <div id="admin-sub-recent-list" class="space-y-2"></div>
+                <p class="text-xs text-slate-400 mb-2">현재 근무중인 대체근무자 (이번달 / 올해 횟수)</p>
+                <div id="admin-sub-worker-counts" class="space-y-2"></div>
             </div>
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 class="text-lg font-bold mb-4">🚫 결근/조퇴 현황 <span class="text-xs font-normal text-slate-400">(이번달·실시간)</span></h3>
@@ -1214,6 +1216,21 @@
                     </div>
                 </div>
             </div>
+            <!-- 근무 시간 / 차량번호 (구조화된 필드 — 메모에 자유 입력하던 방식 대체) -->
+            <div class="grid grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">🕐 출근</label>
+                    <input type="time" id="sub-start-time" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">🕐 퇴근</label>
+                    <input type="time" id="sub-end-time" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">🚕 차량</label>
+                    <input type="text" id="sub-vehicle-no" maxlength="20" placeholder="예: 14" class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+                </div>
+            </div>
             <!-- 연차 신청 연결 (결근자 있을 때만) -->
             <div id="sub-leave-request-wrap">
                 <label class="block text-sm font-bold text-slate-700 mb-1">🔗 연차 신청 연결 <span class="text-xs text-slate-400 font-normal">(선택)</span></label>
@@ -1225,7 +1242,7 @@
             <!-- 메모 -->
             <div>
                 <label class="block text-sm font-bold text-slate-700 mb-1">📝 메모 <span class="text-xs text-slate-400 font-normal">(선택)</span></label>
-                <textarea id="sub-note" rows="2" maxlength="200" placeholder="특이사항이나 조건 등을 메모하세요." class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none"></textarea>
+                <textarea id="sub-note" rows="2" maxlength="200" placeholder="근무시간/차량번호는 위 항목에 입력하세요. 여기는 그 외 특이사항만 적어주세요." class="block w-full rounded-lg border border-slate-300 p-2.5 shadow-sm text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none"></textarea>
             </div>
             <p id="sub-form-error" class="text-red-500 text-sm hidden"></p>
             <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
@@ -2084,6 +2101,9 @@ const App = {
             subSubstituteDropdown: document.getElementById('sub-substitute-dropdown'),
             subLeaveRequest: document.getElementById('sub-leave-request'),
             subNote: document.getElementById('sub-note'),
+            subStartTime: document.getElementById('sub-start-time'),
+            subEndTime: document.getElementById('sub-end-time'),
+            subVehicleNo: document.getElementById('sub-vehicle-no'),
             subEditId: document.getElementById('sub-edit-id'),
             subFormError: document.getElementById('sub-form-error'),
             // 결근 관리
@@ -2843,6 +2863,68 @@ const App = {
 
         const monthTotal = selectedYear === curYear ? monthCounts[curMonthNum - 1] : 0;
         document.getElementById('my-sub-stats-month-total').textContent = monthTotal + '회';
+
+        // 이번달 근무 일자별 시간 — 출근/퇴근 구조화 필드 우선, 없으면(과거 데이터) 메모 텍스트에서 추출
+        const curMonthPrefix = todayStr.slice(0, 7);
+        const thisMonthSubs = mySubs.filter(s => String(s.workDate).startsWith(curMonthPrefix));
+        const hoursByDay = {};
+        thisMonthSubs.forEach(s => {
+            const day = parseInt(String(s.workDate).slice(8, 10), 10);
+            const hrs = this._getSubHours(s);
+            if (day && hrs) hoursByDay[day] = (hoursByDay[day] || 0) + hrs;
+        });
+        const dayNums = Object.keys(hoursByDay).map(Number).sort((a, b) => a - b);
+        const daysListEl = document.getElementById('my-sub-stats-days-list');
+        if (daysListEl) {
+            daysListEl.innerHTML = dayNums.length
+                ? dayNums.map(d => `<span class="inline-flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-sm text-slate-700">${d}일<span class="text-indigo-600 font-semibold ml-0.5">(${hoursByDay[d]}시간)</span></span>`).join('')
+                : '<p class="text-slate-400 text-sm">이번달 근무시간 정보가 없습니다.</p>';
+        }
+    },
+
+    // 시:분(HH:MM)을 "7시" 또는 "7시 30분" 형태로 표시
+    _fmtSubTime(t) {
+        const parts = String(t || '').split(':');
+        const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10) || 0;
+        if (isNaN(h)) return '';
+        return m ? `${h}시 ${m}분` : `${h}시`;
+    },
+
+    // 출근/퇴근/차량 구조화 필드로 "근무시간: 7시~13시(14호차)" 형태의 라벨 생성 — 구조화 데이터가 없으면 null
+    _getSubWorkTimeLabel(s) {
+        if (!s || !s.workStartTime || !s.workEndTime) return null;
+        const vehicle = s.vehicleNo ? `(${s.vehicleNo}호차)` : '';
+        return `근무시간: ${this._fmtSubTime(s.workStartTime)}~${this._fmtSubTime(s.workEndTime)}${vehicle}`;
+    },
+
+    // 화면에 표시할 메모 텍스트 — 구조화된 근무시간 라벨 + 그 외 자유 메모를 합쳐서 반환
+    _getSubDisplayNote(s) {
+        const label = this._getSubWorkTimeLabel(s);
+        if (label && s?.note) return `${label} · ${s.note}`;
+        return label || s?.note || '';
+    },
+
+    // 대체근무 1건의 근무시간(시간 단위) — 구조화 필드 우선, 없으면(과거 데이터) 메모 텍스트에서 추출
+    _getSubHours(s) {
+        if (s && s.workStartTime && s.workEndTime) {
+            const toMin = t => { const [h, m] = String(t).split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+            let diff = toMin(s.workEndTime) - toMin(s.workStartTime);
+            if (diff <= 0) diff += 24 * 60; // 자정을 넘기는 근무
+            return Math.round((diff / 60) * 10) / 10;
+        }
+        return this._parseWorkHours(s?.note); // 구조화 필드가 없는 과거 데이터는 메모 텍스트에서 추출(폴백)
+    },
+
+    // (레거시 폴백) 메모(note)의 "7시~13시", "22시~07시(자정 넘김)" 같은 패턴에서 근무시간(시간 단위)을 추출
+    _parseWorkHours(note) {
+        if (!note) return null;
+        const m = String(note).match(/(\d{1,2})\s*시\s*~\s*(\d{1,2})\s*시/);
+        if (!m) return null;
+        const start = parseInt(m[1], 10), end = parseInt(m[2], 10);
+        if (isNaN(start) || isNaN(end)) return null;
+        let hours = end - start;
+        if (hours <= 0) hours += 24; // 자정을 넘기는 근무 (예: 22시~07시 → 9시간)
+        return hours;
     },
 
     // 관리자 로그인 전용 — 대체근무 현황 / 결근·조퇴 현황을 실시간(현재 상태 기준)으로 표시
@@ -2868,13 +2950,22 @@ const App = {
         document.getElementById('admin-sub-week').textContent  = weekSubs.length + '건';
         document.getElementById('admin-sub-month').textContent = monthSubs.length + '건';
 
-        const recentSubs = [...subs].sort((a,b) => String(b.workDate).localeCompare(String(a.workDate))).slice(0, 5);
-        document.getElementById('admin-sub-recent-list').innerHTML = recentSubs.length
-            ? recentSubs.map(s => `<div class="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 text-sm">
-                <span class="text-slate-500">${this._esc(s.workDate)}</span>
-                <span class="font-medium">${this._esc(empName(s.absenteeId))} → ${this._esc(empName(s.substituteId))}</span>
+        // 대체근무자별 근무 횟수 (재직 중인 대체근무자 기준, 이번달/올해)
+        const curYear = todayStr.slice(0, 4);
+        const subEmployees = this.state.employees.filter(e => e.role === 'substitute' && !e.resignDate);
+        const workerStats = subEmployees.map(e => {
+            const monthCount = subs.filter(s => String(s.substituteId) === String(e.id) && String(s.workDate).startsWith(curMonth)).length;
+            const yearCount  = subs.filter(s => String(s.substituteId) === String(e.id) && String(s.workDate).startsWith(curYear)).length;
+            return { name: e.name, monthCount, yearCount };
+        }).filter(w => w.yearCount > 0)
+          .sort((a, b) => b.monthCount - a.monthCount || b.yearCount - a.yearCount);
+
+        document.getElementById('admin-sub-worker-counts').innerHTML = workerStats.length
+            ? workerStats.map(w => `<div class="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 text-sm">
+                <span class="font-medium">${this._esc(w.name)}</span>
+                <span class="text-slate-500">이번달 <span class="text-indigo-600 font-semibold">${w.monthCount}회</span> / 올해 <span class="text-sky-600 font-semibold">${w.yearCount}회</span></span>
             </div>`).join('')
-            : '<p class="text-slate-400 text-sm text-center py-4">등록된 대체근무가 없습니다.</p>';
+            : '<p class="text-slate-400 text-sm text-center py-4">등록된 대체근무자가 없습니다.</p>';
 
         // ── 결근/조퇴 현황 (이번달) ──
         const monthAbsences = this.state.leaveRequests.filter(r =>
@@ -2964,6 +3055,9 @@ const App = {
                 '결근자 차량':  absentee?.department  || '',
                 '대체 근무자':  this._resolveName(s.substituteId, s.substituteName, '미지정'),
                 '대체자 차량':  substitute?.department || '',
+                '출근시간':     s.workStartTime || '',
+                '퇴근시간':     s.workEndTime || '',
+                '근무 차량번호': s.vehicleNo || '',
                 '연차 연결':    lr ? `${lr.startDate}~${lr.endDate} (${lr.days}일)` : '',
                 '메모':         s.note || '',
                 '등록일':       s.createdAt || '',
@@ -3066,7 +3160,7 @@ const App = {
                     <td class="py-2.5 pr-3 font-medium text-slate-700 whitespace-nowrap">${s.workDate}</td>
                     <td class="py-2.5 pr-3">${roleTag}</td>
                     <td class="py-2.5 pr-3 text-slate-600"><span class="text-xs text-slate-400 mr-1">${arrow}</span>${this._esc(other?.name || '?')}</td>
-                    <td class="py-2.5 text-slate-400 text-xs">${this._esc(s.note || '-')}</td>
+                    <td class="py-2.5 text-slate-400 text-xs">${this._esc(this._getSubDisplayNote(s) || '-')}</td>
                 </tr>`;
             }).join('')
             : '<tr><td colspan="4" class="py-8 text-center text-slate-400 text-sm">대체근무 내역이 없습니다.</td></tr>';
@@ -3300,7 +3394,7 @@ const App = {
                         <span class="text-slate-400 text-xs">결근</span>
                         <span class="font-medium text-sm text-slate-600">${this._esc(absenteeName)}</span>
                     </div>` : ''}
-                    ${s.note ? `<p class="text-xs text-slate-400 mt-1">${this._esc(s.note)}</p>` : ''}
+                    ${this._getSubDisplayNote(s) ? `<p class="text-xs text-slate-400 mt-1">${this._esc(this._getSubDisplayNote(s))}</p>` : ''}
                 </div>`;
             }).join('');
         }
@@ -3842,7 +3936,7 @@ const App = {
                     <td data-label="결근자" class="p-4"><span class="inline-flex items-center gap-1.5 bg-red-50 text-red-700 px-2.5 py-1 rounded-full text-sm font-medium">😴 ${this._esc(absenteeName)}</span></td>
                     <td data-label="대체 근무자" class="p-4"><span class="inline-flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-sm font-medium">🚗 ${this._esc(substituteName)}</span></td>
                     <td data-label="연차 연결" class="p-4 text-sm text-slate-500">${lr?`<span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">${lr.startDate}~${lr.endDate} (${lr.days}일)</span>`:'<span class="text-xs text-slate-400">-</span>'}</td>
-                    <td data-label="메모" class="p-4 text-sm text-slate-500">${this._esc(s.note||'-')}</td>
+                    <td data-label="메모" class="p-4 text-sm text-slate-500">${this._esc(this._getSubDisplayNote(s)||'-')}</td>
                     <td data-label="작업" class="p-4 text-center">
                         <button data-id="${s.id}" data-act="sub-edit" class="bg-slate-500 text-white px-2 py-1 rounded text-xs mr-1 hover:bg-slate-600">수정</button>
                         ${deleteBtn}
@@ -4418,6 +4512,9 @@ const App = {
                     : '';
                 this.dom.subSubstituteInput.value = subEmpName;
                 this.dom.subNote.value       = sub.note || '';
+                this.dom.subStartTime.value  = sub.workStartTime || '';
+                this.dom.subEndTime.value    = sub.workEndTime || '';
+                this.dom.subVehicleNo.value  = sub.vehicleNo || '';
                 this.updateAbsenteeOptions(sub.workDate, sub.absenteeId);
                 this.updateSubLeaveRequestOptions(sub.leaveRequestId);
             }
@@ -4429,6 +4526,9 @@ const App = {
 
             this.dom.subWorkDate.value = '';
             this.dom.subNote.value     = '';
+            this.dom.subStartTime.value = '';
+            this.dom.subEndTime.value   = '';
+            this.dom.subVehicleNo.value = '';
             this.updateAbsenteeOptions('');
             this.dom.subSubstitute.value = '';
             this.dom.subSubstituteInput.value = '';
@@ -4568,6 +4668,9 @@ const App = {
             substituteId:   substituteId || '',
             workDate,
             note:           this.dom.subNote.value,
+            workStartTime:  this.dom.subStartTime.value || '',
+            workEndTime:    this.dom.subEndTime.value || '',
+            vehicleNo:      this.dom.subVehicleNo.value.trim(),
         };
         this.callServer(editId ? 'updateSubstitution' : 'addSubstitution', [payload, this.state.adminPassword]);
     },
@@ -5064,14 +5167,14 @@ const App = {
                 const sub=subs.find(s=>String(s.leaveRequestId)===String(r.id));
                 const subEmp=sub?this.state.employees.find(emp=>emp.id===sub.substituteId):null;
                 const subName=subEmp?.name||null;
-                const subMemo=sub?.note?`<p class="text-xs text-slate-400 mt-0.5 pl-4">📝 ${this._esc(sub.note)}</p>`:'';
+                const subMemo=this._getSubDisplayNote(sub)?`<p class="text-xs text-slate-400 mt-0.5 pl-4">📝 ${this._esc(this._getSubDisplayNote(sub))}</p>`:'';
                 const adminBtns=isAdmin?`<div class="mt-1 flex gap-1">${(() => { const today=this.state.today||this.toLocalISO(new Date()); const d30=new Date(today); d30.setDate(d30.getDate()-30); const cutoff30=this.toLocalISO(d30); const isOld=r.status==='approved'&&r.endDate<cutoff30; return isOld ? '' : `<button data-id="${r.id}" data-act="edit" class="text-xs text-blue-500">수정</button><button data-id="${r.id}" data-act="delete" class="text-xs text-red-500">삭제</button>`; })()}${r.type==='결근'&&!sub?`<button data-id="${r.id}" data-act="add-sub" class="text-xs text-indigo-500">대체등록</button>`:''}</div>`:'';
                 return `<div class="bg-slate-50 p-3 rounded border"><p class="font-bold text-sm">${this._esc(e?.name||'?')} <span class="text-slate-500 font-normal">(${this._esc(r.type)})</span></p>${subName?`<p class="text-xs text-indigo-600 mt-0.5">🔄 대체: ${this._esc(subName)}</p>${subMemo}`:''} ${adminBtns}</div>`;
             }),
             ...subs.filter(s=>!s.leaveRequestId).map(s=>{
                 const ab=this.state.employees.find(e=>String(e.id)===String(s.absenteeId));
                 const sub=this.state.employees.find(e=>String(e.id)===String(s.substituteId));
-                const memo=s.note?`<p class="text-xs text-slate-400 mt-1">📝 ${this._esc(s.note)}</p>`:'';
+                const memo=this._getSubDisplayNote(s)?`<p class="text-xs text-slate-400 mt-1">📝 ${this._esc(this._getSubDisplayNote(s))}</p>`:'';
                 return `<div class="bg-indigo-50 p-3 rounded border border-indigo-100"><p class="font-bold text-sm text-indigo-700">🔄 대체근무</p><p class="text-xs text-slate-600 mt-0.5">결근: ${this._esc(ab?.name||'?')} → 대체: ${this._esc(sub?.name||'?')}</p>${memo}</div>`;
             })
         ].join('') || '<p class="text-slate-400 text-center py-4">내역 없음</p>';
