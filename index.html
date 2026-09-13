@@ -439,7 +439,7 @@
         </div>
         <!-- 전체 현황 (관리자 전용) -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 hidden" data-role="admin">
-            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚕</span><div><h3 class="text-slate-500 font-medium text-sm">전체기사: 상용직/일용직</h3><p id="total-employees" class="text-3xl font-bold mt-1">0 / 0</p></div></div>
+            <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🚕</span><div><h3 class="text-slate-500 font-medium text-sm">전체 근로자</h3><p id="total-employees" class="text-2xl font-bold mt-1 whitespace-nowrap">0명(상용:0/일용:0)</p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">📥</span><div><h3 class="text-slate-500 font-medium text-sm">휴가승인 대기건수</h3><p id="pending-requests" class="text-3xl font-bold mt-1 text-amber-500">0건</p></div></div>
             <div class="kpi-card flex items-center"><span class="text-3xl mr-4">🔄</span><div><h3 class="text-slate-500 font-medium text-sm">이번달 대체근무</h3><p id="this-month-subs" class="text-3xl font-bold mt-1 text-indigo-500">0건</p></div></div>
         </div>
@@ -2746,7 +2746,7 @@ const App = {
     renderDashboard(leaveStatus) {
         const regularCount = this.state.employees.filter(e => e.role !== 'substitute' && !e.resignDate).length;
         const dailyCount   = this.state.employees.filter(e => e.role === 'substitute' && !e.resignDate).length;
-        this.dom.totalEmployees.textContent = `${regularCount} / ${dailyCount}`;
+        this.dom.totalEmployees.textContent = `${regularCount + dailyCount}명(상용:${regularCount}/일용:${dailyCount})`;
         this.dom.pendingRequests.textContent = this.state.leaveRequests.filter(r => r.status==='pending').length + '건';
 
         const curMonth = (this.state.today||this.toLocalISO(new Date())).slice(0,7);
