@@ -1618,21 +1618,33 @@
     const API_URL = 'https://script.google.com/macros/s/AKfycbwP186jdjpFN25v1J2fKLHkQozgK0-tYnqIjtQQS5z9Hxzz0qfUdJThqXCIQpeQdqCq3A/exec';
 
     async function callBackend(func, args, onSuccess, onFailure) {
+        let res;
         try {
-            const res = await fetch(API_URL, {
+            res = await fetch(API_URL, {
                 method: 'POST',
                 // text/plain으로 보내야 CORS preflight(OPTIONS)가 발생하지 않음 (Apps Script가 OPTIONS를 처리 못함)
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ func, args })
             });
-            const json = await res.json();
-            if (json && json.ok) {
-                onSuccess && onSuccess(json.data);
-            } else {
-                onFailure && onFailure({ message: (json && json.error) || '알 수 없는 서버 오류입니다.' });
-            }
         } catch (err) {
-            onFailure && onFailure({ message: err.message || '네트워크 오류가 발생했습니다.' });
+            // fetch 자체가 실패 — 네트워크 단절, CORS 차단 등
+            onFailure && onFailure({ message: '서버에 연결할 수 없습니다. 인터넷 연결 상태를 확인한 뒤 다시 시도해주세요.' });
+            return;
+        }
+
+        let json;
+        try {
+            json = await res.json();
+        } catch (parseErr) {
+            // 응답이 JSON이 아님(예: HTML 오류 페이지) — 배포 주소가 잘못되었거나 배포가 만료/변경된 경우가 대부분
+            onFailure && onFailure({ message: '서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요. 문제가 계속되면 관리자에게 문의해주세요.' });
+            return;
+        }
+
+        if (json && json.ok) {
+            onSuccess && onSuccess(json.data);
+        } else {
+            onFailure && onFailure({ message: (json && json.error) || '알 수 없는 서버 오류입니다.' });
         }
     }
 
