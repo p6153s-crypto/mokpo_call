@@ -1617,19 +1617,33 @@
     // ⚠️ 개발/배포 후 실제 doPost가 포함된 배포 URL(...exec)로 꼭 교체할 것
     const API_URL = 'https://script.google.com/macros/s/AKfycbwP186jdjpFN25v1J2fKLHkQozgK0-tYnqIjtQQS5z9Hxzz0qfUdJThqXCIQpeQdqCq3A/exec';
 
+    // GAS 웹앱은 사용자가 몰릴 때 응답이 매우 늦어지거나(간헐적 지연) 아예 멈춘 것처럼 보일 수 있어,
+    // 일정 시간 안에 응답이 없으면 타임아웃으로 처리해 "확인 중..."에서 멈추지 않도록 한다.
+    const REQUEST_TIMEOUT_MS = 25000;
+
     async function callBackend(func, args, onSuccess, onFailure) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
         let res;
         try {
             res = await fetch(API_URL, {
                 method: 'POST',
                 // text/plain으로 보내야 CORS preflight(OPTIONS)가 발생하지 않음 (Apps Script가 OPTIONS를 처리 못함)
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ func, args })
+                body: JSON.stringify({ func, args }),
+                signal: controller.signal,
             });
         } catch (err) {
-            // fetch 자체가 실패 — 네트워크 단절, CORS 차단 등
-            onFailure && onFailure({ message: '서버에 연결할 수 없습니다. 인터넷 연결 상태를 확인한 뒤 다시 시도해주세요.' });
+            const timedOut = err && err.name === 'AbortError';
+            onFailure && onFailure({
+                message: timedOut
+                    ? '서버 응답이 너무 늦어 요청을 중단했습니다. 접속자가 많아 지연될 수 있습니다. 잠시 후 다시 시도해주세요.'
+                    : '서버에 연결할 수 없습니다. 인터넷 연결 상태를 확인한 뒤 다시 시도해주세요.'
+            });
             return;
+        } finally {
+            clearTimeout(timeoutId);
         }
 
         let json;
@@ -1970,29 +1984,40 @@ const App = {
 
     // 다른 사용자가 등록/수정한 데이터(공지, 연차, 대체근무 등)를 주기적으로 반영
     startAutoRefresh() {
-        const INTERVAL_MS = 60 * 1000; // 60초
-        setInterval(() => {
-            // 입력 중인 모달이 열려있으면 갱신을 건너뜀 (작업 방해 방지)
-            const modalSelectors = ['#absence-modal','#admin-login-modal','#admin-reauth-modal','#daily-leave-modal',
-                '#driver-detail-modal','#leave-edit-modal','#leave-password-modal','#notice-modal','#retire-modal',
-                '#stats-detail-modal','#substitution-modal'];
-            const anyModalOpen = modalSelectors.some(sel => {
-                const el = document.querySelector(sel);
-                return el && !el.classList.contains('hidden');
-            });
-            if (anyModalOpen) return;
-            if (!this.dom.app || this.dom.app.classList.contains('hidden')) return;
+        const BASE_INTERVAL_MS = 60 * 1000; // 60초
+        const JITTER_MS = 20 * 1000;        // ±20초 — 여러 사용자가 정확히 같은 시각에 몰려 요청하는 것을 방지
+        const nextDelay = () => BASE_INTERVAL_MS + (Math.random() * 2 - 1) * JITTER_MS;
 
-            const runner = google.script.run
-                .withSuccessHandler(data => {
-                    if (!data || data.error) return;
-                    this.state = { ...this.state, ...data, holidays: new Set(data.holidays||[]) };
-                    this.render();
-                })
-                .withFailureHandler(() => {}); // 네트워크 오류 시 조용히 무시, 다음 주기에 재시도
-            if (this.state.loginEmployeeId) runner.getServerData(this.state.loginEmployeeId, this.state.loginBirthDate);
-            else if (this.state.adminOnlyPassword) runner.getServerDataAsAdmin(this.state.adminOnlyPassword);
-        }, INTERVAL_MS);
+        const tick = () => {
+            this._autoRefreshTimer = setTimeout(() => {
+                // 입력 중인 모달이 열려있으면 갱신을 건너뜀 (작업 방해 방지)
+                const modalSelectors = ['#absence-modal','#admin-login-modal','#admin-reauth-modal','#daily-leave-modal',
+                    '#driver-detail-modal','#leave-edit-modal','#leave-password-modal','#notice-modal','#retire-modal',
+                    '#stats-detail-modal','#substitution-modal'];
+                const anyModalOpen = modalSelectors.some(sel => {
+                    const el = document.querySelector(sel);
+                    return el && !el.classList.contains('hidden');
+                });
+                if (anyModalOpen || !this.dom.app || this.dom.app.classList.contains('hidden')) {
+                    tick();
+                    return;
+                }
+
+                const runner = google.script.run
+                    .withSuccessHandler(data => {
+                        if (!data || data.error) return;
+                        this.state = { ...this.state, ...data, holidays: new Set(data.holidays||[]) };
+                        this.render();
+                    })
+                    .withFailureHandler(() => {}); // 네트워크/서버 오류 시 조용히 무시, 다음 주기에 재시도
+                if (this.state.loginEmployeeId) runner.getServerData(this.state.loginEmployeeId, this.state.loginBirthDate);
+                else if (this.state.adminOnlyPassword) runner.getServerDataAsAdmin(this.state.adminOnlyPassword);
+
+                tick();
+            }, nextDelay());
+        };
+        if (this._autoRefreshTimer) clearTimeout(this._autoRefreshTimer);
+        tick();
     },
 
     cacheDOM() {
