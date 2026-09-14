@@ -11,8 +11,16 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0284c7">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <!-- 실제 API가 나가는 도메인과 주요 외부 리소스 도메인에 미리 연결해 지연을 줄인다 -->
+    <link rel="preconnect" href="https://script.google.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <!-- defer: HTML 파싱을 막지 않고, DOM이 준비된 뒤(DOMContentLoaded 직전) 실행되게 함 -->
+    <script defer src="https://cdn.tailwindcss.com"></script>
+    <!-- 엑셀(xlsx) 라이브러리는 더 이상 페이지 로드 시 무조건 받아오지 않는다.
+         실제로 엑셀 다운로드 기능을 사용할 때만 지연 로드한다(App._loadXlsxLib 참고).
+         예전에는 cdn.sheetjs.com을 썼는데, 이 도메인이 일부 네트워크/환경에서
+         느리거나 막혀 있어 페이지 전체 로딩이 지연·실패하는 원인이 될 수 있었다. -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         /* =============================================
@@ -1621,7 +1629,8 @@
     // 일정 시간 안에 응답이 없으면 타임아웃으로 처리해 "확인 중..."에서 멈추지 않도록 한다.
     const REQUEST_TIMEOUT_MS = 25000;
 
-    async function callBackend(func, args, onSuccess, onFailure) {
+    async function callBackend(func, args, onSuccess, onFailure, attempt) {
+        attempt = attempt || 1;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -1635,6 +1644,10 @@
                 signal: controller.signal,
             });
         } catch (err) {
+            clearTimeout(timeoutId);
+            // GAS 웹앱은 콜드스타트 등으로 첫 요청만 간헐적으로 느리거나 실패하는 경우가 많아,
+            // 실패를 바로 보여주기 전에 한 번 더 자동으로 재시도한다.
+            if (attempt < 2) return callBackend(func, args, onSuccess, onFailure, attempt + 1);
             const timedOut = err && err.name === 'AbortError';
             onFailure && onFailure({
                 message: timedOut
@@ -1642,9 +1655,8 @@
                     : '서버에 연결할 수 없습니다. 인터넷 연결 상태를 확인한 뒤 다시 시도해주세요.'
             });
             return;
-        } finally {
-            clearTimeout(timeoutId);
         }
+        clearTimeout(timeoutId);
 
         let json;
         try {
@@ -3061,9 +3073,27 @@ const App = {
         document.getElementById('sub-excel-yearly-ctrl').classList.toggle('hidden', isMonthly);
     },
 
-    downloadSubExcel() {
-        if (typeof XLSX === 'undefined') {
-            return this.showToast('엑셀 라이브러리 로드 중입니다. 잠시 후 다시 시도해주세요.', 'error');
+    // 엑셀(xlsx) 라이브러리를 실제로 필요할 때(엑셀 다운로드 클릭 시)만 지연 로드한다.
+    // 페이지 로드 시 항상 받아오지 않게 해서 초기 로딩을 가볍고 빠르게 유지한다.
+    _xlsxLoadPromise: null,
+    _loadXlsxLib() {
+        if (typeof XLSX !== 'undefined') return Promise.resolve();
+        if (this._xlsxLoadPromise) return this._xlsxLoadPromise;
+        this._xlsxLoadPromise = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+            s.onload = () => resolve();
+            s.onerror = () => { this._xlsxLoadPromise = null; reject(new Error('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인 후 다시 시도해주세요.')); };
+            document.head.appendChild(s);
+        });
+        return this._xlsxLoadPromise;
+    },
+
+    async downloadSubExcel() {
+        try {
+            await this._loadXlsxLib();
+        } catch (e) {
+            return this.showToast(e.message || '엑셀 라이브러리 로드에 실패했습니다.', 'error');
         }
         const isMonthly = (this._subExcelTab || 'monthly') === 'monthly';
         const target = isMonthly
